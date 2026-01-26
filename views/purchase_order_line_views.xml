@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Vista Lista (Tree) -->
+    <record id="purchase_order_line_tree_report" model="ir.ui.view">
+        <field name="name">purchase.order.line.tree.report</field>
+        <field name="model">purchase.order.line</field>
+        <field name="arch" type="xml">
+            <tree string="Líneas de Compra">
+                <field name="order_id"/>
+                <field name="date_order"/>
+                <field name="partner_id"/>
+                <field name="product_categ_id"/>
+                <field name="product_id"/>
+                <field name="name"/>
+                <field name="product_qty" sum="Total Cantidad"/>
+                <field name="product_uom_id"/>
+                <field name="currency_id"/>
+                <field name="price_unit"/>
+                <field name="price_subtotal" sum="Total Subtotal"/>
+                <field name="state"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vista Pivot -->
+    <record id="purchase_order_line_pivot_report" model="ir.ui.view">
+        <field name="name">purchase.order.line.pivot.report</field>
+        <field name="model">purchase.order.line</field>
+        <field name="arch" type="xml">
+            <pivot string="Análisis de Líneas de Compra">
+                <field name="currency_id" type="row"/>
+                <field name="partner_id" type="row"/>
+                <field name="product_categ_id" type="row"/>
+                <field name="product_id" type="row"/>
+                <field name="product_uom_id" type="row"/>
+                <field name="date_planned" type="col" interval="month"/>
+                <field name="product_qty" type="measure"/>
+                <field name="price_subtotal" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <!-- Vista Search -->
+    <record id="purchase_order_line_search_report" model="ir.ui.view">
+        <field name="name">purchase.order.line.search.report</field>
+        <field name="model">purchase.order.line</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Líneas de Compra">
+                <field name="order_id"/>
+                <field name="partner_id"/>
+                <field name="product_categ_id"/>
+                <field name="product_id"/>
+                <field name="product_uom_id"/>
+                <field name="currency_id"/>
+                <field name="state"/>
+                <filter string="Borrador" name="draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Confirmadas" name="confirmed" domain="[('state', '=', 'purchase')]"/>
+                <filter string="Realizadas" name="done" domain="[('state', '=', 'done')]"/>
+                <separator/>
+                <filter string="Fecha Prevista" name="date_planned" date="date_planned"/>
+                <group expand="0" string="Agrupar por">
+                    <filter string="Moneda" name="group_currency" context="{'group_by': 'currency_id'}"/>
+                    <filter string="Proveedor" name="group_partner" context="{'group_by': 'partner_id'}"/>
+                    <filter string="Categoría" name="group_categ" context="{'group_by': 'product_categ_id'}"/>
+                    <filter string="Producto" name="group_product" context="{'group_by': 'product_id'}"/>
+                    <filter string="Unidad de Medida" name="group_uom" context="{'group_by': 'product_uom_id'}"/>
+                    <filter string="Estado" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Fecha Prevista" name="group_date" context="{'group_by': 'date_planned:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Acción de Ventana -->
+    <record id="purchase_order_line_action_report" model="ir.actions.act_window">
+        <field name="name">Líneas de Compra</field>
+        <field name="res_model">purchase.order.line</field>
+        <field name="view_mode">tree,pivot</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'tree', 'view_id': ref('purchase_order_line_tree_report')}),
+            (0, 0, {'view_mode': 'pivot', 'view_id': ref('purchase_order_line_pivot_report')})]"/>
+        <field name="search_view_id" ref="purchase_order_line_search_report"/>
+        <field name="context">{'search_default_confirmed': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No hay líneas de compra para mostrar
+            </p>
+        </field>
+    </record>
+
+    <!-- Menú dentro de Informes de Compras -->
+    <menuitem
+        id="menu_purchase_order_line_report"
+        name="Líneas de Compra"
+        parent="purchase.purchase_report_main"
+        action="purchase_order_line_action_report"
+        sequence="20"/>
+
+</odoo>

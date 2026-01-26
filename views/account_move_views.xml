@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Por qué: Hereda la vista de factura para agregar el checkbox de imprimir en pesos -->
+    <!-- Patrón: xpath con position="after" para insertar después de un elemento existente -->
+    <record id="view_move_form_print_pesos" model="ir.ui.view">
+        <field name="name">account.move.form.print.pesos</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <!-- Tip: Ubicamos el campo cerca del campo de moneda para contexto visual -->
+            <xpath expr="//field[@name='currency_id']" position="after">
+                <field name="print_in_pesos"
+                       invisible="currency_id == company_currency_id"
+                       widget="boolean_toggle"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

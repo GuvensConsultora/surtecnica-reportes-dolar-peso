@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+    Por qué: Heredamos el documento de factura para mostrar valores en pesos cuando corresponda.
+    Patrón: Template inheritance con xpath para reemplazar secciones específicas del PDF.
+    Tip: En Odoo 17, el reporte principal es 'account.report_invoice_document'.
+    -->
+
+    <!-- Herencia del documento principal de factura -->
+    <template id="report_invoice_document_pesos" inherit_id="account.report_invoice_document">
+
+        <!-- Agregar nota informativa cuando se imprime en pesos -->
+        <xpath expr="//div[@id='informations']" position="inside">
+            <div t-if="o.print_in_pesos and o._is_foreign_currency()" class="col-auto col-3 mw-100 mb-2">
+                <strong>Moneda Original:</strong>
+                <p class="m-0" t-field="o.currency_id.name"/>
+            </div>
+            <div t-if="o.print_in_pesos and o._is_foreign_currency()" class="col-auto col-3 mw-100 mb-2">
+                <strong>Impreso en:</strong>
+                <p class="m-0" t-field="o.company_currency_id.name"/>
+            </div>
+        </xpath>
+
+        <!-- Reemplazar precio unitario en líneas -->
+        <xpath expr="//span[@t-field='line.price_unit']" position="attributes">
+            <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
+        </xpath>
+        <xpath expr="//span[@t-field='line.price_unit']" position="after">
+            <span t-if="o.print_in_pesos and o._is_foreign_currency()"
+                  t-field="line.price_unit_pesos"/>
+        </xpath>
+
+        <!-- Reemplazar subtotal en líneas -->
+        <xpath expr="//span[@t-field='line.price_subtotal']" position="attributes">
+            <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
+        </xpath>
+        <xpath expr="//span[@t-field='line.price_subtotal']" position="after">
+            <span t-if="o.print_in_pesos and o._is_foreign_currency()"
+                  t-field="line.price_subtotal_pesos"/>
+        </xpath>
+
+        <!-- Reemplazar moneda mostrada en totales -->
+        <!-- Base imponible -->
+        <xpath expr="//span[@t-field='o.amount_untaxed']" position="attributes">
+            <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
+        </xpath>
+        <xpath expr="//span[@t-field='o.amount_untaxed']" position="after">
+            <span t-if="o.print_in_pesos and o._is_foreign_currency()"
+                  t-field="o.amount_untaxed_pesos"/>
+        </xpath>
+
+        <!-- Total impuestos -->
+        <xpath expr="//span[@t-field='o.amount_tax']" position="attributes">
+            <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
+        </xpath>
+        <xpath expr="//span[@t-field='o.amount_tax']" position="after">
+            <span t-if="o.print_in_pesos and o._is_foreign_currency()"
+                  t-field="o.amount_tax_pesos"/>
+        </xpath>
+
+        <!-- Total -->
+        <xpath expr="//span[@t-field='o.amount_total']" position="attributes">
+            <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
+        </xpath>
+        <xpath expr="//span[@t-field='o.amount_total']" position="after">
+            <span t-if="o.print_in_pesos and o._is_foreign_currency()"
+                  t-field="o.amount_total_pesos"/>
+        </xpath>
+
+        <!-- Monto residual / por pagar -->
+        <xpath expr="//span[@t-field='o.amount_residual']" position="attributes">
+            <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
+        </xpath>
+        <xpath expr="//span[@t-field='o.amount_residual']" position="after">
+            <t t-if="o.print_in_pesos and o._is_foreign_currency()">
+                <t t-set="amount_residual_pesos" t-value="o.currency_id._convert(o.amount_residual, o.company_currency_id, o.company_id, o.date or today)"/>
+                <span t-out="amount_residual_pesos" t-options="{'widget': 'monetary', 'display_currency': o.company_currency_id}"/>
+            </t>
+        </xpath>
+
+    </template>
+</odoo>
