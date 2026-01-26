@@ -38,6 +38,17 @@
         El template llama a ese método directamente.
         -->
 
+        <!--
+        ── Pagos asociados ───────────────────────────────────────────
+        Por qué: El template base muestra payment_vals['amount'] con
+        display_currency: o.currency_id (USD). Necesitamos convertir
+        el monto Y cambiar el símbolo de moneda cuando se imprime en pesos.
+        -->
+        <xpath expr='//span[contains(@t-out, "payment_vals")]' position="attributes">
+            <attribute name="t-out">o.currency_id._convert(payment_vals['amount'], o.company_currency_id, o.company_id, o.date) if o.print_in_pesos and o._is_foreign_currency() else payment_vals['amount']</attribute>
+            <attribute name="t-options">{"widget": "monetary", "display_currency": o.company_currency_id if o.print_in_pesos and o._is_foreign_currency() else o.currency_id}</attribute>
+        </xpath>
+
         <!-- ── Monto residual / por pagar ───────────────────────────── -->
         <xpath expr="//span[@t-field='o.amount_residual']" position="attributes">
             <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
