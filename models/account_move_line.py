@@ -18,12 +18,12 @@ class AccountMoveLine(models.Model):
         currency_field='company_currency_id',
     )
 
-    @api.depends('price_unit', 'price_subtotal', 'currency_id', 'company_currency_id', 'move_id.date')
+    @api.depends('price_unit', 'price_subtotal', 'currency_id', 'company_currency_id', 'move_id.invoice_date', 'move_id.date')
     def _compute_amounts_pesos(self):
         """Calcula precio unitario y subtotal en moneda de la compañía."""
         for line in self:
             if line.currency_id and line.company_currency_id and line.currency_id != line.company_currency_id:
-                date = line.move_id.date or fields.Date.context_today(line)
+                date = line.move_id.invoice_date or line.move_id.date or fields.Date.context_today(line)
                 line.price_unit_pesos = line.currency_id._convert(
                     line.price_unit, line.company_currency_id, line.company_id, date)
                 line.price_subtotal_pesos = line.currency_id._convert(
@@ -44,7 +44,7 @@ class AccountMoveLine(models.Model):
             currency = move.currency_id
             company_currency = move.company_currency_id
             company = move.company_id
-            date = move.date or fields.Date.context_today(self)
+            date = move.invoice_date or move.date or fields.Date.context_today(self)
             # Tip: Convertimos todas las claves monetarias del dict
             for key in ('price_unit', 'price_subtotal', 'price_total', 'vat_amount'):
                 if key in result:

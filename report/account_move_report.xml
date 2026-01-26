@@ -79,7 +79,7 @@
         el monto Y cambiar el símbolo de moneda cuando se imprime en pesos.
         -->
         <xpath expr='//span[contains(@t-out, "payment_vals")]' position="attributes">
-            <attribute name="t-out">o.currency_id._convert(payment_vals['amount'], o.company_currency_id, o.company_id, o.date) if o.print_in_pesos and o._is_foreign_currency() else payment_vals['amount']</attribute>
+            <attribute name="t-out">o.currency_id._convert(payment_vals['amount'], o.company_currency_id, o.company_id, o.invoice_date or o.date) if o.print_in_pesos and o._is_foreign_currency() else payment_vals['amount']</attribute>
             <attribute name="t-options">{"widget": "monetary", "display_currency": o.company_currency_id if o.print_in_pesos and o._is_foreign_currency() else o.currency_id}</attribute>
         </xpath>
 
@@ -89,7 +89,7 @@
         </xpath>
         <xpath expr="//span[@t-field='o.amount_residual']" position="after">
             <t t-if="o.print_in_pesos and o._is_foreign_currency()">
-                <t t-set="amount_residual_pesos" t-value="o.currency_id._convert(o.amount_residual, o.company_currency_id, o.company_id, o.date or today)"/>
+                <t t-set="amount_residual_pesos" t-value="o.currency_id._convert(o.amount_residual, o.company_currency_id, o.company_id, o.invoice_date or o.date)"/>
                 <span t-out="amount_residual_pesos" t-options="{'widget': 'monetary', 'display_currency': o.company_currency_id}"/>
             </t>
         </xpath>
@@ -99,7 +99,9 @@
             <div t-if="o.print_in_pesos and o._is_foreign_currency()"
                  class="text-muted small mt-1 text-end" style="font-style: italic;">
                 Valores expresados en <t t-out="o.company_currency_id.name"/> —
-                Moneda original: <t t-out="o.currency_id.name"/>
+                Moneda original: <t t-out="o.currency_id.name"/> —
+                T.C. al <t t-out="o.invoice_date or o.date" t-options='{"widget": "date"}'/>:
+                <t t-out="o.l10n_ar_currency_rate"/>
             </div>
         </xpath>
 

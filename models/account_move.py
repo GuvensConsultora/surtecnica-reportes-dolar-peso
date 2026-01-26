@@ -34,12 +34,13 @@ class AccountMove(models.Model):
         currency_field='company_currency_id',
     )
 
-    @api.depends('amount_untaxed', 'amount_tax', 'amount_total', 'currency_id', 'company_currency_id', 'date')
+    @api.depends('amount_untaxed', 'amount_tax', 'amount_total', 'currency_id', 'company_currency_id', 'invoice_date', 'date')
     def _compute_amounts_pesos(self):
         """Calcula los montos en la moneda de la compañía usando la tasa de la fecha de factura."""
         for move in self:
             if move.currency_id and move.company_currency_id and move.currency_id != move.company_currency_id:
-                date = move.date or fields.Date.context_today(move)
+                # Por qué: invoice_date es la fecha del comprobante (la que importa para el TC)
+                date = move.invoice_date or move.date or fields.Date.context_today(move)
                 move.amount_untaxed_pesos = move.currency_id._convert(
                     move.amount_untaxed, move.company_currency_id, move.company_id, date)
                 move.amount_tax_pesos = move.currency_id._convert(
@@ -87,7 +88,8 @@ class AccountMove(models.Model):
         currency = self.currency_id
         company_currency = self.company_currency_id
         company = self.company_id
-        date = self.date or fields.Date.context_today(self)
+        # Por qué: Usamos invoice_date (fecha del comprobante) para tomar el TC del día de emisión
+        date = self.invoice_date or self.date or fields.Date.context_today(self)
 
         def convert(amount):
             return currency._convert(amount, company_currency, company, date)
