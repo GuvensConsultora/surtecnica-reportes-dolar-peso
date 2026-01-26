@@ -39,37 +39,20 @@ class AccountMove(models.Model):
         """Calcula los montos en la moneda de la compañía usando la tasa de la fecha de factura."""
         for move in self:
             if move.currency_id and move.company_currency_id and move.currency_id != move.company_currency_id:
-                # Por qué: Usamos la fecha de la factura para obtener la tasa de conversión correcta
-                # Tip: _convert() es el método estándar de Odoo para conversión de moneda
                 date = move.date or fields.Date.context_today(move)
                 move.amount_untaxed_pesos = move.currency_id._convert(
-                    move.amount_untaxed,
-                    move.company_currency_id,
-                    move.company_id,
-                    date,
-                )
+                    move.amount_untaxed, move.company_currency_id, move.company_id, date)
                 move.amount_tax_pesos = move.currency_id._convert(
-                    move.amount_tax,
-                    move.company_currency_id,
-                    move.company_id,
-                    date,
-                )
+                    move.amount_tax, move.company_currency_id, move.company_id, date)
                 move.amount_total_pesos = move.currency_id._convert(
-                    move.amount_total,
-                    move.company_currency_id,
-                    move.company_id,
-                    date,
-                )
+                    move.amount_total, move.company_currency_id, move.company_id, date)
             else:
-                # Por qué: Si ya está en moneda local, usamos los valores directamente
                 move.amount_untaxed_pesos = move.amount_untaxed
                 move.amount_tax_pesos = move.amount_tax
                 move.amount_total_pesos = move.amount_total
 
     def action_toggle_print_pesos(self):
         """Toggle para el smart button de impresión en pesos."""
-        # Por qué: El stat button necesita un método object para alternar el valor
-        # Patrón: Toggle simple, sin lógica adicional
         for move in self:
             move.print_in_pesos = not move.print_in_pesos
 
@@ -78,15 +61,26 @@ class AccountMove(models.Model):
         self.ensure_one()
         return self.currency_id and self.company_currency_id and self.currency_id != self.company_currency_id
 
-    def _get_tax_totals_pesos(self):
-        """Retorna el dict tax_totals con montos convertidos a moneda de la compañía.
+    # ── Override l10n_ar ──────────────────────────────────────────────────
+    # Por qué: l10n_ar.report_invoice_document (primary=True) usa este método
+    # para obtener el dict de totales del reporte. Si print_in_pesos está activo,
+    # interceptamos y devolvemos la versión convertida a pesos.
+    def _l10n_ar_get_invoice_totals_for_report(self):
+        result = super()._l10n_ar_get_invoice_totals_for_report()
+        if self.print_in_pesos and self._is_foreign_currency():
+            return self._convert_tax_totals_to_pesos(result)
+        return result
 
-        Por qué: En Odoo 17 los totales de factura se renderizan desde un dict JSON (tax_totals),
-        no con t-field individuales. Para mostrar en pesos, convertimos todo el dict.
-        Patrón: Deep copy + conversión in-place para no mutar el original.
+    # ── Conversión de totales ─────────────────────────────────────────────
+    def _convert_tax_totals_to_pesos(self, tax_totals_dict):
+        """Convierte cualquier dict de tax_totals a moneda de la compañía.
+
+        Por qué: Método reutilizable que sirve tanto para el override de l10n_ar
+        como para el wrapper _get_tax_totals_pesos().
+        Patrón: Deep copy para no mutar el dict original.
         """
         self.ensure_one()
-        tax_totals = copy.deepcopy(self.tax_totals or {})
+        tax_totals = copy.deepcopy(tax_totals_dict)
         if not tax_totals:
             return tax_totals
 
@@ -114,6 +108,7 @@ class AccountMove(models.Model):
         for subtotal in tax_totals.get('subtotals', []):
             subtotal['amount'] = convert(subtotal['amount'])
             subtotal['formatted_amount'] = fmt(subtotal['amount'])
+            subtotal.pop('amount_company_currency', None)
 
         # Grupos de impuestos
         for groups in tax_totals.get('groups_by_subtotal', {}).values():
@@ -124,13 +119,18 @@ class AccountMove(models.Model):
                 if 'tax_group_base_amount' in group:
                     group['tax_group_base_amount'] = convert(group['tax_group_base_amount'])
                     group['formatted_tax_group_base_amount'] = fmt(group['tax_group_base_amount'])
-                # Por qué: Eliminamos claves de moneda de compañía para evitar
-                # que el bloque "company currency" muestre valores redundantes
                 group.pop('tax_group_amount_company_currency', None)
                 group.pop('tax_group_base_amount_company_currency', None)
 
-        # Por qué: Igual para subtotales, ya estamos mostrando en moneda de compañía
-        for subtotal in tax_totals.get('subtotals', []):
-            subtotal.pop('amount_company_currency', None)
+        # Por qué: Detalle de impuestos argentinos (RG 5614/2024 - Transparencia Fiscal)
+        for detail in tax_totals.get('detail_ar_tax', []):
+            if 'amount_tax' in detail:
+                detail['amount_tax'] = convert(detail['amount_tax'])
+                detail['formatted_amount_tax'] = fmt(detail['amount_tax'])
 
         return tax_totals
+
+    def _get_tax_totals_pesos(self):
+        """Wrapper de compatibilidad: convierte tax_totals estándar a pesos."""
+        self.ensure_one()
+        return self._convert_tax_totals_to_pesos(self.tax_totals or {})

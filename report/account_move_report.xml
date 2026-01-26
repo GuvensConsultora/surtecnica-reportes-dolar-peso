@@ -1,54 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!--
-    Por qué: Heredamos el documento de factura para mostrar valores en pesos cuando corresponda.
-    Patrón: Template inheritance con xpath para reemplazar secciones específicas del PDF.
-    Tip: En Odoo 17, el reporte principal es 'account.report_invoice_document'.
+    Por qué: DEBE heredar de l10n_ar.report_invoice_document porque ese template
+    tiene primary="True" y es el que realmente renderiza el PDF argentino.
+    Heredar de account.report_invoice_document NO afecta al PDF de AR.
     -->
+    <template id="report_invoice_document_pesos" inherit_id="l10n_ar.report_invoice_document">
 
-    <!-- Herencia del documento principal de factura -->
-    <template id="report_invoice_document_pesos" inherit_id="account.report_invoice_document">
-
-        <!-- Agregar nota informativa cuando se imprime en pesos -->
+        <!-- ── Nota informativa en la sección de datos ──────────────── -->
         <xpath expr="//div[@id='informations']" position="inside">
-            <div t-if="o.print_in_pesos and o._is_foreign_currency()" class="col-auto col-3 mw-100 mb-2">
-                <strong>Moneda Original:</strong>
-                <p class="m-0" t-field="o.currency_id.name"/>
+            <div t-if="o.print_in_pesos and o._is_foreign_currency()" class="col-12 mt-2">
+                <strong>Moneda Original:</strong> <span t-field="o.currency_id.name"/>
+                <span class="mx-1">|</span>
+                <strong>Impreso en:</strong> <span t-field="o.company_currency_id.name"/>
             </div>
-            <div t-if="o.print_in_pesos and o._is_foreign_currency()" class="col-auto col-3 mw-100 mb-2">
-                <strong>Impreso en:</strong>
-                <p class="m-0" t-field="o.company_currency_id.name"/>
-            </div>
-        </xpath>
-
-        <!-- Reemplazar precio unitario en líneas -->
-        <xpath expr="//span[@t-field='line.price_unit']" position="attributes">
-            <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
-        </xpath>
-        <xpath expr="//span[@t-field='line.price_unit']" position="after">
-            <span t-if="o.print_in_pesos and o._is_foreign_currency()"
-                  t-field="line.price_unit_pesos"/>
-        </xpath>
-
-        <!-- Reemplazar subtotal en líneas -->
-        <xpath expr="//span[@t-field='line.price_subtotal']" position="attributes">
-            <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
-        </xpath>
-        <xpath expr="//span[@t-field='line.price_subtotal']" position="after">
-            <span t-if="o.print_in_pesos and o._is_foreign_currency()"
-                  t-field="line.price_subtotal_pesos"/>
         </xpath>
 
         <!--
-        Por qué: En Odoo 17 los totales se renderizan desde un dict JSON (tax_totals)
-        via t-call="account.document_tax_totals", no con t-field individuales.
-        Reemplazamos el dict por su versión en pesos cuando corresponda.
+        ── Precios de líneas ─────────────────────────────────────────
+        Por qué: l10n_ar reemplaza t-field="line.price_unit" por
+        t-out="l10n_ar_values['price_unit']" con display_currency: o.currency_id.
+        Los VALORES ya están en pesos gracias al override de _l10n_ar_prices_and_taxes().
+        Solo necesitamos cambiar display_currency para mostrar el símbolo correcto.
         -->
-        <xpath expr="//t[@t-set='tax_totals']" position="attributes">
-            <attribute name="t-value">o._get_tax_totals_pesos() if o.print_in_pesos and o._is_foreign_currency() else (o.tax_totals or {})</attribute>
+        <xpath expr='//span[contains(@t-out, "price_unit")]' position="attributes">
+            <attribute name="t-options">{"widget": "float", "display_currency": o.company_currency_id if o.print_in_pesos and o._is_foreign_currency() else o.currency_id, "decimal_precision": "Product Price"}</attribute>
         </xpath>
 
-        <!-- Monto residual / por pagar -->
+        <xpath expr='//span[contains(@t-out, "price_subtotal")]' position="attributes">
+            <attribute name="t-options">{"widget": "monetary", "display_currency": o.company_currency_id if o.print_in_pesos and o._is_foreign_currency() else o.currency_id}</attribute>
+        </xpath>
+
+        <!--
+        ── tax_totals: NO necesita xpath ─────────────────────────────
+        Por qué: El override de _l10n_ar_get_invoice_totals_for_report() en Python
+        ya devuelve el dict convertido a pesos con formatLang(company_currency).
+        El template llama a ese método directamente.
+        -->
+
+        <!-- ── Monto residual / por pagar ───────────────────────────── -->
         <xpath expr="//span[@t-field='o.amount_residual']" position="attributes">
             <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
         </xpath>
@@ -59,10 +49,7 @@
             </t>
         </xpath>
 
-        <!--
-        Por qué: Nota al pie de los totales para dejar claro que los valores
-        están expresados en la moneda de la compañía y no en la moneda original.
-        -->
+        <!-- ── Nota al pie de totales ────────────────────────────────── -->
         <xpath expr="//div[@id='total']" position="after">
             <div t-if="o.print_in_pesos and o._is_foreign_currency()"
                  class="text-muted small mt-1 text-end" style="font-style: italic;">

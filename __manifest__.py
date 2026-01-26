@@ -10,7 +10,9 @@
     """,
     'author': 'Surtecnica',
     'website': '',
-    'depends': ['purchase', 'account'],
+    # Por qué: l10n_ar es necesario porque la factura argentina usa
+    # l10n_ar.report_invoice_document (primary=True), un template independiente
+    'depends': ['purchase', 'account', 'l10n_ar'],
     'data': [
         'views/purchase_order_line_views.xml',
         'views/account_move_views.xml',
