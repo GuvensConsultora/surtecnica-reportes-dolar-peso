@@ -7,6 +7,40 @@
     -->
     <template id="report_invoice_document_pesos" inherit_id="l10n_ar.report_invoice_document">
 
+        <!--
+        ── Estilos para mejorar legibilidad del PDF ──────────────────
+        Por qué: El tamaño de fuente por defecto de Odoo es pequeño en papel.
+        Aumentamos el tamaño general, de montos y del bloque de totales.
+        -->
+        <xpath expr="//div[@id='informations']" position="before">
+            <style>
+                /* Tamaño base del documento */
+                .page {
+                    font-size: 13px;
+                }
+                /* Líneas de productos */
+                table.o_report_block_table tbody td,
+                table.o_report_block_table thead th {
+                    font-size: 13px;
+                }
+                /* Montos y precios más legibles */
+                table.o_report_block_table td.text-end span,
+                table.o_report_block_table td span[t-out] {
+                    font-size: 13px;
+                }
+                /* Bloque de totales al pie */
+                div#total table.table td,
+                div#total table.table th,
+                div#total table.table span {
+                    font-size: 14px !important;
+                }
+                /* Sección informativa (cliente, fechas, etc.) */
+                div#informations {
+                    font-size: 13px;
+                }
+            </style>
+        </xpath>
+
         <!-- ── Nota informativa en la sección de datos ──────────────── -->
         <xpath expr="//div[@id='informations']" position="inside">
             <div t-if="o.print_in_pesos and o._is_foreign_currency()" class="col-12 mt-2">
