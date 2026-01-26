@@ -39,32 +39,13 @@
                   t-field="line.price_subtotal_pesos"/>
         </xpath>
 
-        <!-- Reemplazar moneda mostrada en totales -->
-        <!-- Base imponible -->
-        <xpath expr="//span[@t-field='o.amount_untaxed']" position="attributes">
-            <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
-        </xpath>
-        <xpath expr="//span[@t-field='o.amount_untaxed']" position="after">
-            <span t-if="o.print_in_pesos and o._is_foreign_currency()"
-                  t-field="o.amount_untaxed_pesos"/>
-        </xpath>
-
-        <!-- Total impuestos -->
-        <xpath expr="//span[@t-field='o.amount_tax']" position="attributes">
-            <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
-        </xpath>
-        <xpath expr="//span[@t-field='o.amount_tax']" position="after">
-            <span t-if="o.print_in_pesos and o._is_foreign_currency()"
-                  t-field="o.amount_tax_pesos"/>
-        </xpath>
-
-        <!-- Total -->
-        <xpath expr="//span[@t-field='o.amount_total']" position="attributes">
-            <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
-        </xpath>
-        <xpath expr="//span[@t-field='o.amount_total']" position="after">
-            <span t-if="o.print_in_pesos and o._is_foreign_currency()"
-                  t-field="o.amount_total_pesos"/>
+        <!--
+        Por qué: En Odoo 17 los totales se renderizan desde un dict JSON (tax_totals)
+        via t-call="account.document_tax_totals", no con t-field individuales.
+        Reemplazamos el dict por su versión en pesos cuando corresponda.
+        -->
+        <xpath expr="//t[@t-set='tax_totals']" position="attributes">
+            <attribute name="t-value">o._get_tax_totals_pesos() if o.print_in_pesos and o._is_foreign_currency() else (o.tax_totals or {})</attribute>
         </xpath>
 
         <!-- Monto residual / por pagar -->

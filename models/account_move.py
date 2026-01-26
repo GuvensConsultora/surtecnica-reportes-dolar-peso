@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
+import copy
 from odoo import api, fields, models
+from odoo.tools.misc import formatLang
 
 
 class AccountMove(models.Model):
@@ -68,3 +70,52 @@ class AccountMove(models.Model):
         """Retorna True si la factura está en moneda extranjera."""
         self.ensure_one()
         return self.currency_id and self.company_currency_id and self.currency_id != self.company_currency_id
+
+    def _get_tax_totals_pesos(self):
+        """Retorna el dict tax_totals con montos convertidos a moneda de la compañía.
+
+        Por qué: En Odoo 17 los totales de factura se renderizan desde un dict JSON (tax_totals),
+        no con t-field individuales. Para mostrar en pesos, convertimos todo el dict.
+        Patrón: Deep copy + conversión in-place para no mutar el original.
+        """
+        self.ensure_one()
+        tax_totals = copy.deepcopy(self.tax_totals or {})
+        if not tax_totals:
+            return tax_totals
+
+        currency = self.currency_id
+        company_currency = self.company_currency_id
+        company = self.company_id
+        date = self.date or fields.Date.context_today(self)
+
+        def convert(amount):
+            return currency._convert(amount, company_currency, company, date)
+
+        def fmt(amount):
+            return formatLang(self.env, amount, currency_obj=company_currency)
+
+        # Totales globales
+        if 'amount_total' in tax_totals:
+            tax_totals['amount_total'] = convert(tax_totals['amount_total'])
+            tax_totals['formatted_amount_total'] = fmt(tax_totals['amount_total'])
+
+        if 'amount_untaxed' in tax_totals:
+            tax_totals['amount_untaxed'] = convert(tax_totals['amount_untaxed'])
+            tax_totals['formatted_amount_untaxed'] = fmt(tax_totals['amount_untaxed'])
+
+        # Subtotales (base imponible por grupo)
+        for subtotal in tax_totals.get('subtotals', []):
+            subtotal['amount'] = convert(subtotal['amount'])
+            subtotal['formatted_amount'] = fmt(subtotal['amount'])
+
+        # Grupos de impuestos
+        for groups in tax_totals.get('groups_by_subtotal', {}).values():
+            for group in groups:
+                if 'tax_group_amount' in group:
+                    group['tax_group_amount'] = convert(group['tax_group_amount'])
+                    group['formatted_tax_group_amount'] = fmt(group['tax_group_amount'])
+                if 'tax_group_base_amount' in group:
+                    group['tax_group_base_amount'] = convert(group['tax_group_base_amount'])
+                    group['formatted_tax_group_base_amount'] = fmt(group['tax_group_base_amount'])
+
+        return tax_totals
