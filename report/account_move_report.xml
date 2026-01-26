@@ -59,5 +59,17 @@
             </t>
         </xpath>
 
+        <!--
+        Por qué: Nota al pie de los totales para dejar claro que los valores
+        están expresados en la moneda de la compañía y no en la moneda original.
+        -->
+        <xpath expr="//div[@id='total']" position="after">
+            <div t-if="o.print_in_pesos and o._is_foreign_currency()"
+                 class="text-muted small mt-1 text-end" style="font-style: italic;">
+                Valores expresados en <t t-out="o.company_currency_id.name"/> —
+                Moneda original: <t t-out="o.currency_id.name"/>
+            </div>
+        </xpath>
+
     </template>
 </odoo>

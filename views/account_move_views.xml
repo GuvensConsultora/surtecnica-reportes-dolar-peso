@@ -1,17 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Por qué: Hereda la vista de factura para agregar el checkbox de imprimir en pesos -->
-    <!-- Patrón: xpath con position="after" para insertar después de un elemento existente -->
+    <!-- Por qué: Hereda la vista de factura para agregar un smart button estético en el button_box -->
+    <!-- Patrón: oe_stat_button es el estándar de Odoo para botones de acción en formularios -->
     <record id="view_move_form_print_pesos" model="ir.ui.view">
         <field name="name">account.move.form.print.pesos</field>
         <field name="model">account.move</field>
         <field name="inherit_id" ref="account.view_move_form"/>
         <field name="arch" type="xml">
-            <!-- Tip: Ubicamos el campo cerca del campo de moneda para contexto visual -->
-            <xpath expr="//field[@name='currency_id']" position="after">
-                <field name="print_in_pesos"
-                       invisible="currency_id == company_currency_id"
-                       widget="boolean_toggle"/>
+            <!-- Tip: El button_box es la zona superior del formulario, ideal para acciones rápidas -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_toggle_print_pesos" type="object"
+                        class="oe_stat_button"
+                        icon="fa-print"
+                        invisible="currency_id == company_currency_id">
+                    <!-- Por qué: Mostramos estado actual con texto dinámico según el toggle -->
+                    <div class="o_stat_info">
+                        <span class="o_stat_value" invisible="not print_in_pesos">$ Pesos</span>
+                        <span class="o_stat_value text-muted" invisible="print_in_pesos">$ USD</span>
+                        <span class="o_stat_text">Impresión</span>
+                    </div>
+                </button>
             </xpath>
         </field>
     </record>

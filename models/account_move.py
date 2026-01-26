@@ -66,6 +66,13 @@ class AccountMove(models.Model):
                 move.amount_tax_pesos = move.amount_tax
                 move.amount_total_pesos = move.amount_total
 
+    def action_toggle_print_pesos(self):
+        """Toggle para el smart button de impresión en pesos."""
+        # Por qué: El stat button necesita un método object para alternar el valor
+        # Patrón: Toggle simple, sin lógica adicional
+        for move in self:
+            move.print_in_pesos = not move.print_in_pesos
+
     def _is_foreign_currency(self):
         """Retorna True si la factura está en moneda extranjera."""
         self.ensure_one()
@@ -117,5 +124,13 @@ class AccountMove(models.Model):
                 if 'tax_group_base_amount' in group:
                     group['tax_group_base_amount'] = convert(group['tax_group_base_amount'])
                     group['formatted_tax_group_base_amount'] = fmt(group['tax_group_base_amount'])
+                # Por qué: Eliminamos claves de moneda de compañía para evitar
+                # que el bloque "company currency" muestre valores redundantes
+                group.pop('tax_group_amount_company_currency', None)
+                group.pop('tax_group_base_amount_company_currency', None)
+
+        # Por qué: Igual para subtotales, ya estamos mostrando en moneda de compañía
+        for subtotal in tax_totals.get('subtotals', []):
+            subtotal.pop('amount_company_currency', None)
 
         return tax_totals
