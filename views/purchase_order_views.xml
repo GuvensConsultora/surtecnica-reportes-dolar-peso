@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Por qué: Hereda la vista de orden de compra para agregar un smart button en el button_box -->
+    <!-- Patrón: oe_stat_button es el estándar de Odoo para botones de acción en formularios -->
+    <record id="view_purchase_order_form_print_pesos" model="ir.ui.view">
+        <field name="name">purchase.order.form.print.pesos</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <!-- Tip: El button_box es la zona superior del formulario, ideal para acciones rápidas -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <!-- Por qué: Odoo 17 exige que el campo esté declarado en la vista
+                     para poder usarlo en atributos invisible -->
+                <field name="print_in_pesos" invisible="1"/>
+                <button name="action_toggle_print_pesos" type="object"
+                        class="oe_stat_button"
+                        icon="fa-print"
+                        invisible="currency_id == company_id.currency_id">
+                    <!-- Por qué: Mostramos estado actual con texto dinámico según el toggle -->
+                    <div class="o_stat_info">
+                        <span class="o_stat_value" invisible="not print_in_pesos">$ Pesos</span>
+                        <span class="o_stat_value text-muted" invisible="print_in_pesos">$ USD</span>
+                        <span class="o_stat_text">Impresión</span>
+                    </div>
+                </button>
+            </xpath>
+        </field>
+    </record>
+</odoo>

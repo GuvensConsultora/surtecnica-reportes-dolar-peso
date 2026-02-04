@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+    Por qué: Hereda del template estándar de presupuesto de venta.
+    A diferencia de facturas, NO usa l10n_ar porque no es un documento fiscal.
+    -->
+    <template id="report_saleorder_document_pesos" inherit_id="sale.report_saleorder_document">
+
+        <!--
+        ── Estilos para mejorar legibilidad del PDF ──────────────────
+        Por qué: El tamaño de fuente por defecto de Odoo es pequeño en papel.
+        Aumentamos el tamaño general, de montos y del bloque de totales.
+        -->
+        <xpath expr="//t[@t-call='web.external_layout']" position="before">
+            <style>
+                /* Tamaño base del documento */
+                .page {
+                    font-size: 13px;
+                }
+                /* Tabla de productos */
+                table thead th,
+                table tbody td {
+                    font-size: 13px;
+                }
+                /* Montos y precios más legibles */
+                table td.text-end span,
+                table td span[t-field],
+                table td span[t-out] {
+                    font-size: 13px;
+                }
+                /* Bloque de totales al pie */
+                #total table td,
+                #total table th,
+                #total table span {
+                    font-size: 14px !important;
+                }
+            </style>
+        </xpath>
+
+        <!-- ── Nota informativa después de la dirección ─────────────── -->
+        <xpath expr="//div[@id='informations']" position="after">
+            <div t-if="doc.print_in_pesos and doc._is_foreign_currency()" class="row mt-2">
+                <div class="col-12">
+                    <strong>Moneda Original:</strong> <span t-field="doc.currency_id.name"/>
+                    <span class="mx-2">|</span>
+                    <strong>Impreso en:</strong> <span t-field="doc.company_id.currency_id.name"/>
+                </div>
+            </div>
+        </xpath>
+
+        <!--
+        ── Precios de líneas ─────────────────────────────────────────
+        Por qué: Necesitamos cambiar tanto el valor como el símbolo de moneda.
+        Los campos computados (*_pesos) ya tienen los valores convertidos.
+        -->
+
+        <!-- Precio unitario -->
+        <xpath expr="//td[@name='td_priceunit']/span" position="replace">
+            <span t-if="not doc.print_in_pesos or not doc._is_foreign_currency()"
+                  t-field="line.price_unit"
+                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
+            <span t-if="doc.print_in_pesos and doc._is_foreign_currency()"
+                  t-out="line.price_unit_pesos"
+                  t-options='{"widget": "monetary", "display_currency": doc.company_id.currency_id}'/>
+        </xpath>
+
+        <!-- Subtotal de línea -->
+        <xpath expr="//td[@name='td_subtotal']/span" position="replace">
+            <span t-if="not doc.print_in_pesos or not doc._is_foreign_currency()"
+                  t-field="line.price_subtotal"
+                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
+            <span t-if="doc.print_in_pesos and doc._is_foreign_currency()"
+                  t-out="line.price_subtotal_pesos"
+                  t-options='{"widget": "monetary", "display_currency": doc.company_id.currency_id}'/>
+        </xpath>
+
+        <!--
+        ── Totales ───────────────────────────────────────────────────
+        Por qué: Usamos los campos computados *_pesos cuando print_in_pesos está activo.
+        -->
+
+        <!-- Subtotal (sin impuestos) -->
+        <xpath expr="//span[@id='amount_untaxed']" position="replace">
+            <span id="amount_untaxed"
+                  t-if="not doc.print_in_pesos or not doc._is_foreign_currency()"
+                  t-field="doc.amount_untaxed"
+                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
+            <span id="amount_untaxed"
+                  t-if="doc.print_in_pesos and doc._is_foreign_currency()"
+                  t-out="doc.amount_untaxed_pesos"
+                  t-options='{"widget": "monetary", "display_currency": doc.company_id.currency_id}'/>
+        </xpath>
+
+        <!-- Impuestos -->
+        <xpath expr="//span[@id='amount_tax']" position="replace">
+            <span id="amount_tax"
+                  t-if="not doc.print_in_pesos or not doc._is_foreign_currency()"
+                  t-field="doc.amount_tax"
+                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
+            <span id="amount_tax"
+                  t-if="doc.print_in_pesos and doc._is_foreign_currency()"
+                  t-out="doc.amount_tax_pesos"
+                  t-options='{"widget": "monetary", "display_currency": doc.company_id.currency_id}'/>
+        </xpath>
+
+        <!-- Total -->
+        <xpath expr="//span[@id='amount_total']" position="replace">
+            <span id="amount_total"
+                  t-if="not doc.print_in_pesos or not doc._is_foreign_currency()"
+                  t-field="doc.amount_total"
+                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
+            <span id="amount_total"
+                  t-if="doc.print_in_pesos and doc._is_foreign_currency()"
+                  t-out="doc.amount_total_pesos"
+                  t-options='{"widget": "monetary", "display_currency": doc.company_id.currency_id}'/>
+        </xpath>
+
+        <!-- ── Nota al pie de totales ────────────────────────────────── -->
+        <xpath expr="//div[@id='total']" position="after">
+            <div t-if="doc.print_in_pesos and doc._is_foreign_currency()"
+                 class="text-muted small mt-2 text-end" style="font-style: italic;">
+                Valores expresados en <t t-out="doc.company_id.currency_id.name"/> —
+                Moneda original: <t t-out="doc.currency_id.name"/> —
+                T.C. al <t t-out="doc.date_order" t-options='{"widget": "date"}'/>
+            </div>
+        </xpath>
+
+    </template>
+</odoo>

@@ -3,27 +3,9 @@
 from odoo import api, fields, models
 
 
-class PurchaseOrderLine(models.Model):
-    _inherit = 'purchase.order.line'
+class SaleOrderLine(models.Model):
+    _inherit = 'sale.order.line'
 
-    # ── Campos para análisis de reportes ──────────────────────────────────
-    product_categ_id = fields.Many2one(
-        'product.category',
-        string='Categoría de Producto',
-        related='product_id.categ_id',
-        store=True,
-        readonly=True,
-    )
-
-    product_uom_id = fields.Many2one(
-        'uom.uom',
-        string='UdM del Producto',
-        related='product_id.uom_id',
-        store=True,
-        readonly=True,
-    )
-
-    # ── Campos para impresión en pesos ────────────────────────────────────
     # Por qué: Campos para mostrar precio unitario y subtotal en pesos en el PDF
     price_unit_pesos = fields.Monetary(
         string='Precio Unit. (Pesos)',
