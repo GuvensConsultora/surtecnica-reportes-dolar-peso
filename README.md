@@ -1145,3 +1145,12 @@ LGPL-3
 **Autor:** Surtecnica
 **Versión:** 17.0.1.0.0
 **Categoría:** Accounting
+
+---
+
+## Notas de Versión
+
+### v17.0.1.0.0
+- Implementación inicial de impresión en pesos para facturas, presupuestos de venta y órdenes de compra
+- Agregado campo `company_currency_id` en modelos `sale.order` y `purchase.order` para soporte de campos Monetary
+- Análisis de líneas de compra con vistas pivot y agrupaciones
