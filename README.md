@@ -182,11 +182,13 @@ print_in_pesos = fields.Boolean(
 amount_untaxed_pesos = fields.Monetary(
     string='Base Imponible (Pesos)',
     compute='_compute_amounts_pesos',
-    currency_field='company_currency_id',
+    currency_field='company_currency_id',  # Usa campo nativo de account.move
 )
 amount_tax_pesos = fields.Monetary(...)
 amount_total_pesos = fields.Monetary(...)
 ```
+
+**Nota:** `account.move` ya tiene el campo `company_currency_id` de forma nativa en Odoo 17.
 
 **Método de cálculo:**
 
@@ -436,6 +438,15 @@ print_in_pesos = fields.Boolean(
     default=False,
 )
 
+# Por qué: Campo relacionado necesario para los campos Monetary que usan currency_field
+# Patrón: Campo related para acceder a company_id.currency_id de forma directa
+company_currency_id = fields.Many2one(
+    'res.currency',
+    string='Moneda de la Compañía',
+    related='company_id.currency_id',
+    readonly=True,
+)
+
 amount_untaxed_pesos = fields.Monetary(
     string='Subtotal (Pesos)',
     compute='_compute_amounts_pesos',
@@ -444,6 +455,11 @@ amount_untaxed_pesos = fields.Monetary(
 amount_tax_pesos = fields.Monetary(...)
 amount_total_pesos = fields.Monetary(...)
 ```
+
+**Por qué company_currency_id:**
+- Los campos Monetary requieren especificar un `currency_field`
+- Este campo debe existir en el modelo (Many2one a res.currency)
+- Se define como `related` para acceder a la moneda de la compañía
 
 **Método de cálculo:**
 
@@ -512,15 +528,33 @@ Usa campos computados directamente en el template.
 
 #### Modelo: `purchase.order`
 
-**Implementación idéntica a `sale.order`:**
+**Campos agregados:**
 
 ```python
-print_in_pesos = fields.Boolean(...)
-amount_untaxed_pesos = fields.Monetary(...)
+print_in_pesos = fields.Boolean(
+    string='Imprimir en Pesos',
+    default=False,
+)
+
+# Por qué: Campo relacionado necesario para los campos Monetary que usan currency_field
+# Patrón: Campo related para acceder a company_id.currency_id de forma directa
+company_currency_id = fields.Many2one(
+    'res.currency',
+    string='Moneda de la Compañía',
+    related='company_id.currency_id',
+    readonly=True,
+)
+
+amount_untaxed_pesos = fields.Monetary(
+    string='Subtotal (Pesos)',
+    compute='_compute_amounts_pesos',
+    currency_field='company_currency_id',
+)
 amount_tax_pesos = fields.Monetary(...)
 amount_total_pesos = fields.Monetary(...)
 
-@api.depends(...)
+@api.depends('amount_untaxed', 'amount_tax', 'amount_total',
+             'currency_id', 'company_id.currency_id', 'date_order')
 def _compute_amounts_pesos(self):
     # Usa company_id.currency_id como base
     # Usa date_order para conversión
