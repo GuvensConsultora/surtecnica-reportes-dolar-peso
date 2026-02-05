@@ -100,3 +100,26 @@ class PurchaseOrder(models.Model):
         """Retorna True si la orden está en moneda extranjera."""
         self.ensure_one()
         return self.currency_id and self.company_id.currency_id and self.currency_id != self.company_id.currency_id
+
+    def write(self, vals):
+        """Override para registrar cambios de TC en el chatter inmediatamente."""
+        # Por qué: Registrar el cambio de TC antes de guardar para comparar valores
+        for order in self:
+            if 'manual_currency_rate' in vals and order.manual_currency_rate != vals['manual_currency_rate']:
+                old_rate = order.manual_currency_rate
+                new_rate = vals['manual_currency_rate']
+                # Ejecutar el write primero
+                res = super(PurchaseOrder, order).write(vals)
+                # Registrar en chatter después del cambio
+                if old_rate and new_rate:
+                    order.message_post(
+                        body=f"Tipo de Cambio modificado: {old_rate:.4f} → {new_rate:.4f}",
+                        subject="Cambio de Tipo de Cambio"
+                    )
+                elif new_rate:
+                    order.message_post(
+                        body=f"Tipo de Cambio establecido: {new_rate:.4f}",
+                        subject="Tipo de Cambio"
+                    )
+                return res
+        return super(PurchaseOrder, self).write(vals)
