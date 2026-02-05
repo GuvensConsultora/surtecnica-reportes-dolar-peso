@@ -23,14 +23,27 @@ class PurchaseOrder(models.Model):
         readonly=True,
     )
 
-    # Por qué: Tipo de cambio manual para conversión a pesos
-    # Permite al usuario definir un TC específico en lugar de usar el automático
+    # Por qué: Tipo de cambio para conversión a pesos
+    # Se autocompleta con el TC de la fecha, pero el usuario puede modificarlo
     manual_currency_rate = fields.Float(
-        string='Tipo de Cambio Manual',
+        string='Tipo de Cambio',
         digits=(12, 4),
-        help='Tipo de cambio manual para convertir a pesos. '
-             'Si no se especifica, se usa el TC de la fecha de la orden.',
+        help='Tipo de cambio para convertir a pesos. '
+             'Se autocompleta con el TC de la fecha, pero puede modificarse.',
     )
+
+    @api.onchange('currency_id', 'company_id', 'date_order')
+    def _onchange_currency_rate(self):
+        """Actualiza el TC cuando cambia la moneda o la fecha."""
+        for order in self:
+            if order.currency_id and order.company_id.currency_id and order.currency_id != order.company_id.currency_id:
+                # Por qué: Obtenemos el TC de la fecha actual
+                date = order.date_order or fields.Date.context_today(order)
+                # Convertimos 1 unidad de la moneda extranjera a pesos
+                order.manual_currency_rate = order.currency_id._convert(
+                    1.0, order.company_id.currency_id, order.company_id, date)
+            else:
+                order.manual_currency_rate = 0.0
 
     # Por qué: Campos computados para mostrar valores en moneda de la compañía
     # Patrón: Computed fields con depends para recalcular cuando cambian los valores base
