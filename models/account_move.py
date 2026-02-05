@@ -49,14 +49,16 @@ class AccountMove(models.Model):
     def _onchange_currency_rate(self):
         """Actualiza el TC cuando cambia la moneda o la fecha."""
         for move in self:
-            if move.currency_id and move.company_currency_id and move.currency_id != move.company_currency_id:
-                # Por qué: Obtenemos el TC de la fecha actual
-                date = move.invoice_date or move.date or fields.Date.context_today(move)
-                # Convertimos 1 unidad de la moneda extranjera a pesos
-                move.manual_currency_rate = move.currency_id._convert(
-                    1.0, move.company_currency_id, move.company_id, date)
-            else:
-                move.manual_currency_rate = 0.0
+            # Por qué: Solo actualizar si NO hay TC manual ya establecido (ej: viene del presupuesto)
+            if not move.manual_currency_rate:
+                if move.currency_id and move.company_currency_id and move.currency_id != move.company_currency_id:
+                    # Por qué: Obtenemos el TC de la fecha actual
+                    date = move.invoice_date or move.date or fields.Date.context_today(move)
+                    # Convertimos 1 unidad de la moneda extranjera a pesos
+                    move.manual_currency_rate = move.currency_id._convert(
+                        1.0, move.company_currency_id, move.company_id, date)
+                else:
+                    move.manual_currency_rate = 0.0
 
     @api.depends('amount_untaxed', 'amount_tax', 'amount_total', 'currency_id', 'company_currency_id', 'invoice_date', 'date', 'manual_currency_rate')
     def _compute_amounts_pesos(self):
