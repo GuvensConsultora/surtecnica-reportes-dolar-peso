@@ -78,9 +78,11 @@
         <!--
         ── Totales ───────────────────────────────────────────────────
         Por qué: Usamos los campos computados *_pesos cuando print_in_pesos está activo.
+        Nota: Temporalmente comentado - necesita ajuste de XPath para Odoo 17
         -->
 
         <!-- Subtotal (sin impuestos) -->
+        <!--
         <xpath expr="//span[@t-field='o.amount_untaxed']" position="replace">
             <span t-if="not o.print_in_pesos or not o._is_foreign_currency()"
                   t-field="o.amount_untaxed"
@@ -89,8 +91,10 @@
                   t-out="o.amount_untaxed_pesos"
                   t-options='{"widget": "monetary", "display_currency": o.company_id.currency_id}'/>
         </xpath>
+        -->
 
         <!-- Impuestos -->
+        <!--
         <xpath expr="//span[@t-field='o.amount_tax']" position="replace">
             <span t-if="not o.print_in_pesos or not o._is_foreign_currency()"
                   t-field="o.amount_tax"
@@ -99,8 +103,10 @@
                   t-out="o.amount_tax_pesos"
                   t-options='{"widget": "monetary", "display_currency": o.company_id.currency_id}'/>
         </xpath>
+        -->
 
         <!-- Total -->
+        <!--
         <xpath expr="//span[@t-field='o.amount_total']" position="replace">
             <span t-if="not o.print_in_pesos or not o._is_foreign_currency()"
                   t-field="o.amount_total"
@@ -109,6 +115,7 @@
                   t-out="o.amount_total_pesos"
                   t-options='{"widget": "monetary", "display_currency": o.company_id.currency_id}'/>
         </xpath>
+        -->
 
         <!-- ── Nota al pie de totales ────────────────────────────────── -->
         <xpath expr="//div[@id='total']" position="after">
