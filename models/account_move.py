@@ -16,6 +16,17 @@ class AccountMove(models.Model):
              'el PDF mostrará los valores convertidos a pesos.',
     )
 
+    # Por qué: Tipo de cambio para conversión a pesos
+    # Se autocompleta con el TC de la fecha, pero el usuario puede modificarlo
+    # tracking=True registra cambios en el chatter
+    manual_currency_rate = fields.Float(
+        string='Tipo de Cambio',
+        digits=(12, 4),
+        tracking=True,
+        help='Tipo de cambio para convertir a pesos. '
+             'Se autocompleta con el TC de la fecha, pero puede modificarse.',
+    )
+
     # Por qué: Campos computados para mostrar valores en moneda de la compañía
     # Patrón: Computed fields con depends para recalcular cuando cambian los valores base
     amount_untaxed_pesos = fields.Monetary(
@@ -34,19 +45,39 @@ class AccountMove(models.Model):
         currency_field='company_currency_id',
     )
 
-    @api.depends('amount_untaxed', 'amount_tax', 'amount_total', 'currency_id', 'company_currency_id', 'invoice_date', 'date')
-    def _compute_amounts_pesos(self):
-        """Calcula los montos en la moneda de la compañía usando la tasa de la fecha de factura."""
+    @api.onchange('currency_id', 'company_id', 'invoice_date', 'date')
+    def _onchange_currency_rate(self):
+        """Actualiza el TC cuando cambia la moneda o la fecha."""
         for move in self:
             if move.currency_id and move.company_currency_id and move.currency_id != move.company_currency_id:
-                # Por qué: invoice_date es la fecha del comprobante (la que importa para el TC)
+                # Por qué: Obtenemos el TC de la fecha actual
                 date = move.invoice_date or move.date or fields.Date.context_today(move)
-                move.amount_untaxed_pesos = move.currency_id._convert(
-                    move.amount_untaxed, move.company_currency_id, move.company_id, date)
-                move.amount_tax_pesos = move.currency_id._convert(
-                    move.amount_tax, move.company_currency_id, move.company_id, date)
-                move.amount_total_pesos = move.currency_id._convert(
-                    move.amount_total, move.company_currency_id, move.company_id, date)
+                # Convertimos 1 unidad de la moneda extranjera a pesos
+                move.manual_currency_rate = move.currency_id._convert(
+                    1.0, move.company_currency_id, move.company_id, date)
+            else:
+                move.manual_currency_rate = 0.0
+
+    @api.depends('amount_untaxed', 'amount_tax', 'amount_total', 'currency_id', 'company_currency_id', 'invoice_date', 'date', 'manual_currency_rate')
+    def _compute_amounts_pesos(self):
+        """Calcula los montos en la moneda de la compañía usando la tasa manual o de la fecha de factura."""
+        for move in self:
+            if move.currency_id and move.company_currency_id and move.currency_id != move.company_currency_id:
+                # Por qué: Si hay TC manual, lo usamos; sino usamos el automático de la fecha
+                if move.manual_currency_rate:
+                    # Conversión manual directa multiplicando por el TC
+                    move.amount_untaxed_pesos = move.amount_untaxed * move.manual_currency_rate
+                    move.amount_tax_pesos = move.amount_tax * move.manual_currency_rate
+                    move.amount_total_pesos = move.amount_total * move.manual_currency_rate
+                else:
+                    # Conversión automática usando TC de la fecha
+                    date = move.invoice_date or move.date or fields.Date.context_today(move)
+                    move.amount_untaxed_pesos = move.currency_id._convert(
+                        move.amount_untaxed, move.company_currency_id, move.company_id, date)
+                    move.amount_tax_pesos = move.currency_id._convert(
+                        move.amount_tax, move.company_currency_id, move.company_id, date)
+                    move.amount_total_pesos = move.currency_id._convert(
+                        move.amount_total, move.company_currency_id, move.company_id, date)
             else:
                 move.amount_untaxed_pesos = move.amount_untaxed
                 move.amount_tax_pesos = move.amount_tax

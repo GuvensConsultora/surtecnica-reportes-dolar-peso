@@ -123,3 +123,12 @@ class SaleOrder(models.Model):
                     )
                 return res
         return super(SaleOrder, self).write(vals)
+
+    def _prepare_invoice(self):
+        """Override para copiar el TC del presupuesto a la factura."""
+        # Por qué: Llamamos al método original para obtener los valores base
+        invoice_vals = super(SaleOrder, self)._prepare_invoice()
+        # Por qué: Copiamos el TC manual si existe
+        if self.manual_currency_rate:
+            invoice_vals['manual_currency_rate'] = self.manual_currency_rate
+        return invoice_vals
