@@ -23,6 +23,15 @@ class SaleOrder(models.Model):
         readonly=True,
     )
 
+    # Por qué: Tipo de cambio manual para conversión a pesos
+    # Permite al usuario definir un TC específico en lugar de usar el automático
+    manual_currency_rate = fields.Float(
+        string='Tipo de Cambio Manual',
+        digits=(12, 4),
+        help='Tipo de cambio manual para convertir a pesos. '
+             'Si no se especifica, se usa el TC de la fecha del presupuesto.',
+    )
+
     # Por qué: Campos computados para mostrar valores en moneda de la compañía
     # Patrón: Computed fields con depends para recalcular cuando cambian los valores base
     amount_untaxed_pesos = fields.Monetary(
@@ -41,20 +50,27 @@ class SaleOrder(models.Model):
         currency_field='company_currency_id',
     )
 
-    @api.depends('amount_untaxed', 'amount_tax', 'amount_total', 'currency_id', 'company_id.currency_id', 'date_order')
+    @api.depends('amount_untaxed', 'amount_tax', 'amount_total', 'currency_id', 'company_id.currency_id', 'date_order', 'manual_currency_rate')
     def _compute_amounts_pesos(self):
-        """Calcula los montos en la moneda de la compañía usando la tasa de la fecha del presupuesto."""
+        """Calcula los montos en la moneda de la compañía usando la tasa manual o de la fecha del presupuesto."""
         for order in self:
             # Por qué: Comparamos con company_currency_id (pesos) para detectar presupuestos en USD
             if order.currency_id and order.company_id.currency_id and order.currency_id != order.company_id.currency_id:
-                # Por qué: date_order es la fecha del presupuesto (la que importa para el TC)
-                date = order.date_order or fields.Date.context_today(order)
-                order.amount_untaxed_pesos = order.currency_id._convert(
-                    order.amount_untaxed, order.company_id.currency_id, order.company_id, date)
-                order.amount_tax_pesos = order.currency_id._convert(
-                    order.amount_tax, order.company_id.currency_id, order.company_id, date)
-                order.amount_total_pesos = order.currency_id._convert(
-                    order.amount_total, order.company_id.currency_id, order.company_id, date)
+                # Por qué: Si hay TC manual, lo usamos; sino usamos el automático de la fecha
+                if order.manual_currency_rate:
+                    # Conversión manual directa multiplicando por el TC
+                    order.amount_untaxed_pesos = order.amount_untaxed * order.manual_currency_rate
+                    order.amount_tax_pesos = order.amount_tax * order.manual_currency_rate
+                    order.amount_total_pesos = order.amount_total * order.manual_currency_rate
+                else:
+                    # Conversión automática usando TC de la fecha
+                    date = order.date_order or fields.Date.context_today(order)
+                    order.amount_untaxed_pesos = order.currency_id._convert(
+                        order.amount_untaxed, order.company_id.currency_id, order.company_id, date)
+                    order.amount_tax_pesos = order.currency_id._convert(
+                        order.amount_tax, order.company_id.currency_id, order.company_id, date)
+                    order.amount_total_pesos = order.currency_id._convert(
+                        order.amount_total, order.company_id.currency_id, order.company_id, date)
             else:
                 order.amount_untaxed_pesos = order.amount_untaxed
                 order.amount_tax_pesos = order.amount_tax

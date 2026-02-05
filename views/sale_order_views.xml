@@ -24,6 +24,13 @@
                     </div>
                 </button>
             </xpath>
+
+            <!-- Por qué: Agregar campo de TC manual visible solo en moneda extranjera -->
+            <xpath expr="//field[@name='pricelist_id']" position="after">
+                <field name="manual_currency_rate"
+                       invisible="currency_id == company_id.currency_id"
+                       placeholder="Dejar vacío para usar TC automático"/>
+            </xpath>
         </field>
     </record>
 </odoo>
