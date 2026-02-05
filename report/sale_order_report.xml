@@ -78,7 +78,7 @@
         <!-- Totales: Agregar sección con valores en pesos -->
         <xpath expr="//div[@id='total']" position="replace">
             <div id="total" class="row">
-                <div class="col-6">
+                <div class="col-6 offset-6">
                     <table class="table table-sm">
                         <t t-if="not doc.print_in_pesos or not doc._is_foreign_currency()">
                             <!-- Totales normales cuando no está en modo pesos -->
