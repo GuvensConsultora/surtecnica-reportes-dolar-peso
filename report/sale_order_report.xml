@@ -52,82 +52,48 @@
 
         <!--
         ── Precios de líneas ─────────────────────────────────────────
-        Por qué: Necesitamos cambiar tanto el valor como el símbolo de moneda.
-        Los campos computados (*_pesos) ya tienen los valores convertidos.
-        Temporalmente comentado
+        Por qué: Cambiar display_currency condicionalmente según print_in_pesos
         -->
 
-        <!-- Precio unitario -->
-        <!--
-        <xpath expr="//td[@name='td_priceunit']/span" position="replace">
-            <span t-if="not doc.print_in_pesos or not doc._is_foreign_currency()"
-                  t-field="line.price_unit"
-                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
-            <span t-if="doc.print_in_pesos and doc._is_foreign_currency()"
-                  t-out="line.price_unit_pesos"
-                  t-options='{"widget": "monetary", "display_currency": doc.company_id.currency_id}'/>
+        <!-- Precio unitario - cambiar solo la moneda de visualización -->
+        <xpath expr="//span[@t-field='line.price_unit']" position="attributes">
+            <attribute name="t-options-display_currency">doc.company_id.currency_id if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.currency_id</attribute>
+            <attribute name="t-out">line.price_unit_pesos if (doc.print_in_pesos and doc._is_foreign_currency()) else None</attribute>
+            <attribute name="t-field">None if (doc.print_in_pesos and doc._is_foreign_currency()) else line.price_unit</attribute>
         </xpath>
-        -->
 
         <!-- Subtotal de línea -->
-        <!--
-        <xpath expr="//td[@name='td_subtotal']/span" position="replace">
-            <span t-if="not doc.print_in_pesos or not doc._is_foreign_currency()"
-                  t-field="line.price_subtotal"
-                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
-            <span t-if="doc.print_in_pesos and doc._is_foreign_currency()"
-                  t-out="line.price_subtotal_pesos"
-                  t-options='{"widget": "monetary", "display_currency": doc.company_id.currency_id}'/>
+        <xpath expr="//span[@t-field='line.price_subtotal']" position="attributes">
+            <attribute name="t-options-display_currency">doc.company_id.currency_id if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.currency_id</attribute>
+            <attribute name="t-out">line.price_subtotal_pesos if (doc.print_in_pesos and doc._is_foreign_currency()) else None</attribute>
+            <attribute name="t-field">None if (doc.print_in_pesos and doc._is_foreign_currency()) else line.price_subtotal</attribute>
         </xpath>
-        -->
 
         <!--
         ── Totales ───────────────────────────────────────────────────
-        Por qué: Usamos los campos computados *_pesos cuando print_in_pesos está activo.
-        Temporalmente comentado
+        Por qué: Cambiar valores y moneda de visualización condicionalmente
         -->
 
         <!-- Subtotal (sin impuestos) -->
-        <!--
-        <xpath expr="//span[@id='amount_untaxed']" position="replace">
-            <span id="amount_untaxed"
-                  t-if="not doc.print_in_pesos or not doc._is_foreign_currency()"
-                  t-field="doc.amount_untaxed"
-                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
-            <span id="amount_untaxed"
-                  t-if="doc.print_in_pesos and doc._is_foreign_currency()"
-                  t-out="doc.amount_untaxed_pesos"
-                  t-options='{"widget": "monetary", "display_currency": doc.company_id.currency_id}'/>
+        <xpath expr="//span[@t-field='doc.amount_untaxed']" position="attributes">
+            <attribute name="t-options-display_currency">doc.company_id.currency_id if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.currency_id</attribute>
+            <attribute name="t-out">doc.amount_untaxed_pesos if (doc.print_in_pesos and doc._is_foreign_currency()) else None</attribute>
+            <attribute name="t-field">None if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.amount_untaxed</attribute>
         </xpath>
-        -->
 
         <!-- Impuestos -->
-        <!--
-        <xpath expr="//span[@id='amount_tax']" position="replace">
-            <span id="amount_tax"
-                  t-if="not doc.print_in_pesos or not doc._is_foreign_currency()"
-                  t-field="doc.amount_tax"
-                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
-            <span id="amount_tax"
-                  t-if="doc.print_in_pesos and doc._is_foreign_currency()"
-                  t-out="doc.amount_tax_pesos"
-                  t-options='{"widget": "monetary", "display_currency": doc.company_id.currency_id}'/>
+        <xpath expr="//span[@t-field='doc.amount_tax']" position="attributes">
+            <attribute name="t-options-display_currency">doc.company_id.currency_id if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.currency_id</attribute>
+            <attribute name="t-out">doc.amount_tax_pesos if (doc.print_in_pesos and doc._is_foreign_currency()) else None</attribute>
+            <attribute name="t-field">None if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.amount_tax</attribute>
         </xpath>
-        -->
 
         <!-- Total -->
-        <!--
-        <xpath expr="//span[@id='amount_total']" position="replace">
-            <span id="amount_total"
-                  t-if="not doc.print_in_pesos or not doc._is_foreign_currency()"
-                  t-field="doc.amount_total"
-                  t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
-            <span id="amount_total"
-                  t-if="doc.print_in_pesos and doc._is_foreign_currency()"
-                  t-out="doc.amount_total_pesos"
-                  t-options='{"widget": "monetary", "display_currency": doc.company_id.currency_id}'/>
+        <xpath expr="//span[@t-field='doc.amount_total']" position="attributes">
+            <attribute name="t-options-display_currency">doc.company_id.currency_id if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.currency_id</attribute>
+            <attribute name="t-out">doc.amount_total_pesos if (doc.print_in_pesos and doc._is_foreign_currency()) else None</attribute>
+            <attribute name="t-field">None if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.amount_total</attribute>
         </xpath>
-        -->
 
         <!-- ── Nota al pie de totales ────────────────────────────────── -->
         <xpath expr="//div[hasclass('page')]" position="inside">
