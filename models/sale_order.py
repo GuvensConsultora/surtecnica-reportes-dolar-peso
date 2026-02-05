@@ -25,9 +25,11 @@ class SaleOrder(models.Model):
 
     # Por qué: Tipo de cambio para conversión a pesos
     # Se autocompleta con el TC de la fecha, pero el usuario puede modificarlo
+    # tracking=True registra cambios en el chatter
     manual_currency_rate = fields.Float(
         string='Tipo de Cambio',
         digits=(12, 4),
+        tracking=True,
         help='Tipo de cambio para convertir a pesos. '
              'Se autocompleta con el TC de la fecha, pero puede modificarse.',
     )
