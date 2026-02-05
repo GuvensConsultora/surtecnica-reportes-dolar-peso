@@ -123,6 +123,9 @@ class AccountMove(models.Model):
         date = self.invoice_date or self.date or fields.Date.context_today(self)
 
         def convert(amount):
+            # Por qué: Si hay TC manual, lo usamos para la conversión; sino usamos el TC nativo de Odoo
+            if self.manual_currency_rate:
+                return amount * self.manual_currency_rate
             return currency._convert(amount, company_currency, company, date)
 
         def fmt(amount):

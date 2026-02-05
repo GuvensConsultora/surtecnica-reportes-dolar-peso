@@ -85,19 +85,21 @@
         Por qué: El template base muestra payment_vals['amount'] con
         display_currency: o.currency_id (USD). Necesitamos convertir
         el monto Y cambiar el símbolo de moneda cuando se imprime en pesos.
+        Usa manual_currency_rate si está disponible, sino conversión automática.
         -->
         <xpath expr='//span[contains(@t-out, "payment_vals")]' position="attributes">
-            <attribute name="t-out">o.currency_id._convert(payment_vals['amount'], o.company_currency_id, o.company_id, o.invoice_date or o.date) if o.print_in_pesos and o._is_foreign_currency() else payment_vals['amount']</attribute>
+            <attribute name="t-out">(payment_vals['amount'] * o.manual_currency_rate if o.manual_currency_rate else o.currency_id._convert(payment_vals['amount'], o.company_currency_id, o.company_id, o.invoice_date or o.date)) if o.print_in_pesos and o._is_foreign_currency() else payment_vals['amount']</attribute>
             <attribute name="t-options">{"widget": "monetary", "display_currency": o.company_currency_id if o.print_in_pesos and o._is_foreign_currency() else o.currency_id}</attribute>
         </xpath>
 
         <!-- ── Monto residual / por pagar ───────────────────────────── -->
+        <!-- Por qué: Usa manual_currency_rate si está disponible, sino conversión automática -->
         <xpath expr="//span[@t-field='o.amount_residual']" position="attributes">
             <attribute name="t-if">not (o.print_in_pesos and o._is_foreign_currency())</attribute>
         </xpath>
         <xpath expr="//span[@t-field='o.amount_residual']" position="after">
             <t t-if="o.print_in_pesos and o._is_foreign_currency()">
-                <t t-set="amount_residual_pesos" t-value="o.currency_id._convert(o.amount_residual, o.company_currency_id, o.company_id, o.invoice_date or o.date)"/>
+                <t t-set="amount_residual_pesos" t-value="o.amount_residual * o.manual_currency_rate if o.manual_currency_rate else o.currency_id._convert(o.amount_residual, o.company_currency_id, o.company_id, o.invoice_date or o.date)"/>
                 <span t-out="amount_residual_pesos" t-options="{'widget': 'monetary', 'display_currency': o.company_currency_id}"/>
             </t>
         </xpath>

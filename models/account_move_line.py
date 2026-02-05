@@ -26,16 +26,21 @@ class AccountMoveLine(models.Model):
         currency_field='company_currency_id',
     )
 
-    @api.depends('price_unit', 'price_subtotal', 'currency_id', 'company_currency_id', 'move_id.invoice_date', 'move_id.date')
+    @api.depends('price_unit', 'price_subtotal', 'currency_id', 'company_currency_id', 'move_id.invoice_date', 'move_id.date', 'move_id.manual_currency_rate')
     def _compute_amounts_pesos(self):
         """Calcula precio unitario y subtotal en moneda de la compañía."""
         for line in self:
             if line.currency_id and line.company_currency_id and line.currency_id != line.company_currency_id:
-                date = line.move_id.invoice_date or line.move_id.date or fields.Date.context_today(line)
-                line.price_unit_pesos = line.currency_id._convert(
-                    line.price_unit, line.company_currency_id, line.company_id, date)
-                line.price_subtotal_pesos = line.currency_id._convert(
-                    line.price_subtotal, line.company_currency_id, line.company_id, date)
+                # Por qué: Si hay TC manual, lo usamos; sino usamos el TC automático de la fecha
+                if line.move_id.manual_currency_rate:
+                    line.price_unit_pesos = line.price_unit * line.move_id.manual_currency_rate
+                    line.price_subtotal_pesos = line.price_subtotal * line.move_id.manual_currency_rate
+                else:
+                    date = line.move_id.invoice_date or line.move_id.date or fields.Date.context_today(line)
+                    line.price_unit_pesos = line.currency_id._convert(
+                        line.price_unit, line.company_currency_id, line.company_id, date)
+                    line.price_subtotal_pesos = line.currency_id._convert(
+                        line.price_subtotal, line.company_currency_id, line.company_id, date)
             else:
                 line.price_unit_pesos = line.price_unit
                 line.price_subtotal_pesos = line.price_subtotal
@@ -49,13 +54,20 @@ class AccountMoveLine(models.Model):
         result = super()._l10n_ar_prices_and_taxes()
         move = self.move_id
         if move.print_in_pesos and move._is_foreign_currency():
-            currency = move.currency_id
-            company_currency = move.company_currency_id
-            company = move.company_id
-            date = move.invoice_date or move.date or fields.Date.context_today(self)
-            # Tip: Convertimos todas las claves monetarias del dict
-            for key in ('price_unit', 'price_subtotal', 'price_total', 'vat_amount'):
-                if key in result:
-                    result[key] = currency._convert(
-                        result[key], company_currency, company, date)
+            # Por qué: Si hay TC manual, lo usamos; sino usamos el TC automático de la fecha
+            if move.manual_currency_rate:
+                # Tip: Convertimos todas las claves monetarias del dict usando TC manual
+                for key in ('price_unit', 'price_subtotal', 'price_total', 'vat_amount'):
+                    if key in result:
+                        result[key] = result[key] * move.manual_currency_rate
+            else:
+                currency = move.currency_id
+                company_currency = move.company_currency_id
+                company = move.company_id
+                date = move.invoice_date or move.date or fields.Date.context_today(self)
+                # Tip: Convertimos todas las claves monetarias del dict usando TC automático
+                for key in ('price_unit', 'price_subtotal', 'price_total', 'vat_amount'):
+                    if key in result:
+                        result[key] = currency._convert(
+                            result[key], company_currency, company, date)
         return result
