@@ -56,23 +56,23 @@
         -->
 
         <!-- Precio unitario -->
-        <xpath expr="//td[@name='td_unit_price']/span" position="replace">
-            <span t-if="not o.print_in_pesos or not o._is_foreign_currency()"
-                  t-field="line.price_unit"
-                  t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
-            <span t-if="o.print_in_pesos and o._is_foreign_currency()"
-                  t-out="line.price_unit_pesos"
-                  t-options='{"widget": "monetary", "display_currency": o.company_id.currency_id}'/>
+        <xpath expr="//span[@t-field='line.price_unit']" position="replace">
+            <t t-if="not o.print_in_pesos or not o._is_foreign_currency()">
+                <span t-field="line.price_unit" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+            </t>
+            <t t-if="o.print_in_pesos and o._is_foreign_currency()">
+                <span t-out="line.price_unit_pesos" t-options='{"widget": "monetary", "display_currency": o.company_id.currency_id}'/>
+            </t>
         </xpath>
 
         <!-- Subtotal de línea -->
-        <xpath expr="//td[@name='td_subtotal']/span" position="replace">
-            <span t-if="not o.print_in_pesos or not o._is_foreign_currency()"
-                  t-field="line.price_subtotal"
-                  t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
-            <span t-if="o.print_in_pesos and o._is_foreign_currency()"
-                  t-out="line.price_subtotal_pesos"
-                  t-options='{"widget": "monetary", "display_currency": o.company_id.currency_id}'/>
+        <xpath expr="//span[@t-field='line.price_subtotal']" position="replace">
+            <t t-if="not o.print_in_pesos or not o._is_foreign_currency()">
+                <span t-field="line.price_subtotal" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+            </t>
+            <t t-if="o.print_in_pesos and o._is_foreign_currency()">
+                <span t-out="line.price_subtotal_pesos" t-options='{"widget": "monetary", "display_currency": o.company_id.currency_id}'/>
+            </t>
         </xpath>
 
         <!--
