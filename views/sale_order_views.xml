@@ -32,6 +32,7 @@
             </xpath>
 
             <!-- Por qué: Mostrar totales en pesos cuando print_in_pesos está activo -->
+            <!-- Temporalmente comentado - XPath puede no funcionar en todas las versiones
             <xpath expr="//field[@name='amount_total']" position="after">
                 <field name="amount_total_pesos"
                        invisible="not print_in_pesos or currency_id == company_id.currency_id"
@@ -39,6 +40,7 @@
                        widget="monetary"
                        options="{'currency_field': 'company_currency_id'}"/>
             </xpath>
+            -->
         </field>
     </record>
 </odoo>
