@@ -95,6 +95,50 @@ class AccountMove(models.Model):
         self.ensure_one()
         return self.currency_id and self.company_currency_id and self.currency_id != self.company_currency_id
 
+    # ── Override create/write para aplicar TC manual ──────────────────────
+    # Por qué: Recalcular líneas contables cuando se crea/modifica con TC manual
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Override para aplicar TC manual después de crear la factura."""
+        # Por qué: Primero crear la factura normalmente
+        moves = super().create(vals_list)
+
+        # Por qué: Luego recalcular líneas que tienen TC manual
+        for move in moves:
+            if move.manual_currency_rate and move._is_foreign_currency():
+                move._apply_manual_currency_rate()
+
+        return moves
+
+    def write(self, vals):
+        """Override para aplicar TC manual cuando se modifica."""
+        result = super().write(vals)
+
+        # Por qué: Si se modificó el TC manual, recalcular las líneas
+        if 'manual_currency_rate' in vals:
+            for move in self:
+                if move.manual_currency_rate and move._is_foreign_currency():
+                    move._apply_manual_currency_rate()
+
+        return result
+
+    def _apply_manual_currency_rate(self):
+        """Aplica el TC manual a todas las líneas contables del move."""
+        self.ensure_one()
+        # Por qué: Recalcular debit/credit de las líneas con amount_currency
+        for line in self.line_ids.filtered(lambda l: l.amount_currency and l.currency_id == self.currency_id):
+            # Por qué: Convertir amount_currency a moneda de compañía con TC manual
+            amount_company_currency = line.amount_currency * self.manual_currency_rate
+            # Tip: Asignación directa de debit/credit según el signo
+            if amount_company_currency > 0:
+                line.debit = amount_company_currency
+                line.credit = 0.0
+            else:
+                line.debit = 0.0
+                line.credit = -amount_company_currency
+            # Por qué: balance es debit - credit
+            line.balance = line.debit - line.credit
+
     # ── Override l10n_ar ──────────────────────────────────────────────────
     # Por qué: l10n_ar.report_invoice_document (primary=True) usa este método
     # para obtener el dict de totales del reporte. Si print_in_pesos está activo,
