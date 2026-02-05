@@ -125,19 +125,15 @@ class AccountMove(models.Model):
     def _apply_manual_currency_rate(self):
         """Aplica el TC manual a todas las líneas contables del move."""
         self.ensure_one()
-        # Por qué: Recalcular debit/credit de las líneas con amount_currency
+        # Por qué: Recalcular balance de las líneas con amount_currency
+        # Patrón: Usar with_context para evitar recursiones y write para triggear recálculos
         for line in self.line_ids.filtered(lambda l: l.amount_currency and l.currency_id == self.currency_id):
             # Por qué: Convertir amount_currency a moneda de compañía con TC manual
-            amount_company_currency = line.amount_currency * self.manual_currency_rate
-            # Tip: Asignación directa de debit/credit según el signo
-            if amount_company_currency > 0:
-                line.debit = amount_company_currency
-                line.credit = 0.0
-            else:
-                line.debit = 0.0
-                line.credit = -amount_company_currency
-            # Por qué: balance es debit - credit
-            line.balance = line.debit - line.credit
+            balance = line.amount_currency * self.manual_currency_rate
+            # Tip: Escribir solo balance, debit/credit se recalculan automáticamente
+            line.with_context(check_move_validity=False).write({
+                'balance': balance,
+            })
 
     # ── Override l10n_ar ──────────────────────────────────────────────────
     # Por qué: l10n_ar.report_invoice_document (primary=True) usa este método
