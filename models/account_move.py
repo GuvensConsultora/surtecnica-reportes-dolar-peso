@@ -170,3 +170,30 @@ class AccountMove(models.Model):
         """Wrapper de compatibilidad: convierte tax_totals estándar a pesos."""
         self.ensure_one()
         return self._convert_tax_totals_to_pesos(self.tax_totals or {})
+
+    # ── Override para registración contable con TC manual ─────────────────
+    # Por qué: Recalcular debit/credit de las líneas usando TC manual antes de validar
+    # Patrón: _recompute_dynamic_lines se llama antes de post para recalcular todo
+    def _recompute_dynamic_lines(self, recompute_all_taxes=False, recompute_tax_base_amount=False):
+        """Override para aplicar TC manual a las líneas contables."""
+        # Por qué: Primero ejecutar el comportamiento estándar de Odoo
+        result = super()._recompute_dynamic_lines(recompute_all_taxes, recompute_tax_base_amount)
+
+        # Por qué: Si hay TC manual, recalcular debit/credit de las líneas en moneda extranjera
+        for move in self:
+            if move.manual_currency_rate and move._is_foreign_currency():
+                # Por qué: Recalcular solo las líneas con amount_currency (en USD)
+                for line in move.line_ids.filtered(lambda l: l.amount_currency and l.currency_id == move.currency_id):
+                    # Por qué: Convertir amount_currency a moneda de compañía con TC manual
+                    amount_company_currency = line.amount_currency * move.manual_currency_rate
+                    # Tip: Asignación directa evita recursión, debit/credit según el signo
+                    if amount_company_currency > 0:
+                        line.debit = amount_company_currency
+                        line.credit = 0.0
+                    else:
+                        line.debit = 0.0
+                        line.credit = -amount_company_currency
+                    # Por qué: balance es debit - credit
+                    line.balance = line.debit - line.credit
+
+        return result
