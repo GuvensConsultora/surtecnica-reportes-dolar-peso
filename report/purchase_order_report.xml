@@ -70,38 +70,7 @@
             <attribute name="t-field">None if (o.print_in_pesos and o._is_foreign_currency()) else line.price_subtotal</attribute>
         </xpath>
 
-        <!--
-        ── Totales ───────────────────────────────────────────────────
-        Por qué: Cambiar valores y moneda de visualización condicionalmente
-        Temporalmente comentado - XPath no encuentra los elementos en Odoo 17
-        -->
-
-        <!-- Subtotal (sin impuestos) -->
-        <!--
-        <xpath expr="//span[@t-field='o.amount_untaxed']" position="attributes">
-            <attribute name="t-options-display_currency">o.company_id.currency_id if (o.print_in_pesos and o._is_foreign_currency()) else o.currency_id</attribute>
-            <attribute name="t-out">o.amount_untaxed_pesos if (o.print_in_pesos and o._is_foreign_currency()) else None</attribute>
-            <attribute name="t-field">None if (o.print_in_pesos and o._is_foreign_currency()) else o.amount_untaxed</attribute>
-        </xpath>
-        -->
-
-        <!-- Impuestos -->
-        <!--
-        <xpath expr="//span[@t-field='o.amount_tax']" position="attributes">
-            <attribute name="t-options-display_currency">o.company_id.currency_id if (o.print_in_pesos and o._is_foreign_currency()) else o.currency_id</attribute>
-            <attribute name="t-out">o.amount_tax_pesos if (o.print_in_pesos and o._is_foreign_currency()) else None</attribute>
-            <attribute name="t-field">None if (o.print_in_pesos and o._is_foreign_currency()) else o.amount_tax</attribute>
-        </xpath>
-        -->
-
-        <!-- Total -->
-        <!--
-        <xpath expr="//span[@t-field='o.amount_total']" position="attributes">
-            <attribute name="t-options-display_currency">o.company_id.currency_id if (o.print_in_pesos and o._is_foreign_currency()) else o.currency_id</attribute>
-            <attribute name="t-out">o.amount_total_pesos if (o.print_in_pesos and o._is_foreign_currency()) else None</attribute>
-            <attribute name="t-field">None if (o.print_in_pesos and o._is_foreign_currency()) else o.amount_total</attribute>
-        </xpath>
-        -->
+        <!-- Totales: XPath no funciona en Odoo 17 purchase.order - elementos no existen -->
 
         <!-- ── Nota al pie de totales ────────────────────────────────── -->
         <xpath expr="//div[hasclass('page')]" position="inside">
