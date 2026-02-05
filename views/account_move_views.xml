@@ -25,8 +25,8 @@
                 </button>
             </xpath>
 
-            <!-- Por qué: Agregar campo de TC manual visible solo en moneda extranjera -->
-            <xpath expr="//field[@name='currency_id']" position="after">
+            <!-- Por qué: Agregar campo de TC manual antes del tipo de documento -->
+            <xpath expr="//field[@name='l10n_latam_document_type_id']" position="before">
                 <field name="manual_currency_rate"
                        invisible="currency_id == company_currency_id"/>
             </xpath>
