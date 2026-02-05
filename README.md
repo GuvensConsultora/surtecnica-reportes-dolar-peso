@@ -1,1156 +1,1272 @@
-# Reportes Dólar/Peso - Surtecnica
+# Módulo: Reportes Dólar/Peso con Tipo de Cambio Manual
 
-**Módulo para Odoo 17.0**
-
-## Resumen Ejecutivo
-
-Este módulo permite a empresas argentinas que trabajan con moneda extranjera (principalmente USD) imprimir sus documentos comerciales mostrando valores convertidos a pesos argentinos (ARS), sin modificar los datos contables originales.
-
-**Funcionalidades principales:**
-
-1. **Análisis de Órdenes de Compra**: Vista lista y pivot de líneas de orden de compra con agrupaciones por categoría, proveedor, moneda, etc.
-2. **Impresión de Facturas en Pesos**: Facturas en USD que se imprimen mostrando valores en ARS
-3. **Impresión de Presupuestos de Venta en Pesos**: Presupuestos en USD que se imprimen en ARS
-4. **Impresión de Presupuestos de Compra en Pesos**: Órdenes de compra en USD que se imprimen en ARS
+**Versión:** 17.0.1.0.0
+**Autor:** Surtecnica
+**Categoría:** Accounting / Reporting
+**Licencia:** LGPL-3
 
 ---
 
 ## Tabla de Contenidos
 
-- [Instalación](#instalación)
-- [Parte 1: Análisis de Órdenes de Compra](#parte-1-análisis-de-órdenes-de-compra)
-- [Parte 2: Impresión de Facturas en Pesos](#parte-2-impresión-de-facturas-en-pesos)
-- [Parte 3: Impresión de Presupuestos en Pesos](#parte-3-impresión-de-presupuestos-en-pesos)
-- [Arquitectura Técnica](#arquitectura-técnica)
-- [Flujos de Uso](#flujos-de-uso)
-- [Buenas Prácticas Aplicadas](#buenas-prácticas-aplicadas)
+1. [Resumen Ejecutivo](#resumen-ejecutivo)
+2. [Problema de Negocio](#problema-de-negocio)
+3. [Solución Propuesta](#solución-propuesta)
+4. [Funcionalidad Principal](#funcionalidad-principal)
+5. [Arquitectura Técnica](#arquitectura-técnica)
+6. [Flujos de Uso](#flujos-de-uso)
+7. [Instalación y Configuración](#instalación-y-configuración)
+8. [Troubleshooting](#troubleshooting)
+9. [Buenas Prácticas Implementadas](#buenas-prácticas-implementadas)
 
 ---
 
-## Instalación
+## Resumen Ejecutivo
 
-### Dependencias
+Este módulo resuelve el problema de empresas argentinas que operan en moneda extranjera (USD) pero necesitan presentar documentación comercial y contable en pesos argentinos (ARS), permitiendo:
 
-```python
-'depends': ['purchase', 'account', 'sale', 'l10n_ar']
-```
+**Características principales:**
 
-- **purchase**: Órdenes de compra
-- **account**: Facturas y contabilidad
-- **sale**: Presupuestos de venta
-- **l10n_ar**: Localización Argentina (crítico para facturas)
+1. **Tipo de Cambio Manual Editable**: Define y controla el TC usado para conversiones
+2. **Impresión Dual**: Documentos en USD que se imprimen en ARS sin alterar datos originales
+3. **Registración Contable Personalizada**: Asientos contables usando TC manual, no el TC nativo de Odoo
+4. **Trazabilidad Completa**: Tracking de cambios de TC en el chatter
+5. **Transferencia de TC**: El TC se copia automáticamente desde presupuestos/órdenes a facturas
+6. **Análisis de Compras**: Vistas pivot y reportes para análisis multidimensional
 
-### Instalación
-
-1. Copiar el módulo en la carpeta `addons/`
-2. Actualizar lista de aplicaciones
-3. Instalar "Reportes Dólar/Peso - Surtecnica"
+**Alcance:**
+- Presupuestos de Venta (sale.order)
+- Órdenes de Compra (purchase.order)
+- Facturas de Cliente/Proveedor (account.move)
 
 ---
 
-## PARTE 1: Análisis de Órdenes de Compra
+## Problema de Negocio
 
-### Objetivo
+### Contexto
 
-Facilitar el análisis de compras mediante vistas personalizadas que muestren información agregada de las líneas de orden de compra.
+Las empresas argentinas que operan en mercados internacionales enfrentan desafíos únicos:
 
-### Modelo: `purchase.order.line`
+**Situación típica:**
+- Negociación comercial en USD (moneda estable, aceptada internacionalmente)
+- Necesidad de documentación en ARS (requerimientos locales, proveedores/clientes locales)
+- Volatilidad del peso argentino (tipo de cambio cambia diariamente)
+- Regulaciones contables argentinas (AFIP, registración en pesos)
 
-**Archivo:** `models/purchase_order_line.py`
+**Problemas específicos:**
 
-#### Campos Agregados
+1. **Discrepancia entre TC Oficial y TC Operativo**
+   - Odoo usa TC de `res.currency.rate` (actualización manual o automática)
+   - El TC real de operación puede diferir (TC bancario, TC del día de facturación, TC acordado)
+   - Necesidad de registrar contablemente con el TC real, no el oficial
 
-```python
-product_categ_id = fields.Many2one(
-    'product.category',
-    string='Categoría de Producto',
-    related='product_id.categ_id',
-    store=True,
-    readonly=True,
-)
+2. **Documentación Dual**
+   - Presupuestos negociados en USD
+   - Cliente local necesita ver valores en ARS para aprobación
+   - No se pueden duplicar documentos (problema fiscal)
 
-product_uom_id = fields.Many2one(
-    'uom.uom',
-    string='UdM del Producto',
-    related='product_id.uom_id',
-    store=True,
-    readonly=True,
-)
+3. **Trazabilidad del TC**
+   - El TC del presupuesto debe mantenerse en la factura
+   - Cambios de TC deben quedar registrados (auditoría)
+   - Necesidad de justificar TC usado ante controles fiscales
+
+4. **Registración Contable Precisa**
+   - Los asientos contables (debit/credit) deben reflejar el TC real
+   - El balance debe mostrar valores según TC operativo
+   - Conciliaciones bancarias requieren TC exacto
+
+---
+
+## Solución Propuesta
+
+### Enfoque de Diseño
+
+El módulo implementa una solución **no invasiva** que:
+
+1. **Respeta la funcionalidad estándar de Odoo**: No modifica comportamiento por defecto
+2. **Agrega capacidades opcionales**: El usuario decide cuándo aplicar conversiones
+3. **Mantiene trazabilidad**: Todos los cambios quedan registrados
+4. **Garantiza consistencia**: TC se mantiene desde presupuesto hasta factura y contabilidad
+
+### Componentes de la Solución
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PRESUPUESTO / ORDEN DE COMPRA                │
+│  USD $1,000                                                     │
+│  ┌──────────────────────────────────────────┐                  │
+│  │ Tipo de Cambio Manual: 1,250.00          │ (editable)       │
+│  │ • Auto-completado con TC de la fecha     │                  │
+│  │ • Usuario puede modificar                │                  │
+│  │ • Cambios registrados en chatter         │                  │
+│  └──────────────────────────────────────────┘                  │
+│                                                                 │
+│  Smart Button: [$ Pesos | Impresión] ←─────── Toggle           │
+│                                                                 │
+│  → PDF muestra: $ 1,250,000.00 (si activado)                   │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                            │ Crear Factura
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                           FACTURA                               │
+│  USD $1,000                                                     │
+│  ┌──────────────────────────────────────────┐                  │
+│  │ Tipo de Cambio Manual: 1,250.00          │ (copiado)        │
+│  │ • Viene del presupuesto/orden            │                  │
+│  └──────────────────────────────────────────┘                  │
+│                                                                 │
+│  Smart Button: [$ Pesos | Impresión]                           │
+│                                                                 │
+│  → PDF muestra: $ 1,250,000.00                                 │
+│  → Asientos contables:                                         │
+│     • Debit:  $ 1,250,000.00 (con TC manual)                   │
+│     • Credit: $ 1,250,000.00 (con TC manual)                   │
+│                                                                 │
+│  Nota: Si TC nativo de Odoo es 1,180.00, los asientos IGUAL    │
+│        usan 1,250.00 (TC manual definido por el usuario)       │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Por qué:**
-- Son campos **relacionados** que traen información del producto
-- `store=True` almacena en BD para consultas rápidas sin joins
-- Permiten agrupaciones en reportes pivot
-- `readonly=True` porque no se deben modificar directamente
+---
 
-### Vistas
+## Funcionalidad Principal
 
-**Archivo:** `views/purchase_order_line_views.xml`
+### 1. Tipo de Cambio Manual
 
-#### 1. Vista Lista (Tree)
+**Campo:** `manual_currency_rate`
 
-Muestra todas las líneas de compra en formato tabla con:
-- Orden, fecha, proveedor
-- Categoría y producto
-- Cantidad, unidad de medida
-- Precio unitario, subtotal
-- Estado
+**Ubicación:**
+- Presupuestos de Venta
+- Órdenes de Compra
+- Facturas (Cliente/Proveedor)
+
+**Comportamiento:**
+
+```python
+# Por qué: Auto-completa con TC de la fecha, pero permite edición manual
+@api.onchange('currency_id', 'company_id', 'date_order')
+def _onchange_currency_rate(self):
+    """Actualiza el TC cuando cambia la moneda o la fecha."""
+    for order in self:
+        if order.currency_id != order.company_id.currency_id:
+            date = order.date_order or fields.Date.context_today(order)
+            order.manual_currency_rate = order.currency_id._convert(
+                1.0, order.company_id.currency_id, order.company_id, date)
+```
 
 **Características:**
-- Suma automática de cantidad total y subtotal
-- Ordenado por fecha descendente
 
-#### 2. Vista Pivot
+1. **Auto-completado Inteligente**
+   - Al crear un documento en USD, el campo se completa automáticamente
+   - Usa el TC de la fecha del documento
+   - Se actualiza si cambia la fecha
 
-Análisis multidimensional tipo tabla dinámica:
+2. **Edición Manual**
+   - El usuario puede modificar el valor en cualquier momento
+   - Útil cuando el TC real difiere del TC oficial
+   - Ejemplo: TC acordado con el cliente, TC bancario del día
 
-**Agrupaciones disponibles:**
-- Por fila: Moneda, Proveedor, Categoría, Producto, Unidad
-- Por columna: Fecha planificada (por mes)
-- Medidas: Cantidad, Subtotal
+3. **Tracking en Chatter**
+   ```python
+   manual_currency_rate = fields.Float(
+       tracking=True,  # ← Registra cambios en chatter
+       help='Tipo de cambio para convertir a pesos. '
+            'Se autocompleta con el TC de la fecha, pero puede modificarse.',
+   )
+   ```
+   - Cada cambio genera un mensaje en el chatter
+   - Incluye: valor anterior, valor nuevo, usuario, fecha
+   - Auditoría completa de modificaciones
 
-**Ejemplo de uso:**
-Analizar cuánto se compró de cada categoría por proveedor en cada mes.
+4. **Transferencia Automática**
+   ```python
+   # En sale_order.py y purchase_order.py
+   def _prepare_invoice(self):
+       invoice_vals = super()._prepare_invoice()
+       if self.manual_currency_rate:
+           invoice_vals['manual_currency_rate'] = self.manual_currency_rate
+       return invoice_vals
+   ```
+   - Al crear factura desde presupuesto/orden: TC se copia
+   - Garantiza consistencia entre documentos
+   - Evita discrepancias contables
 
-#### 3. Vista Search/Filtros
+**Visualización:**
 
-**Filtros predefinidos:**
-- Borrador
-- Confirmadas
-- Realizadas
-
-**Agrupaciones:**
-- Por moneda
-- Por proveedor
-- Por categoría de producto
-- Por producto
-- Por unidad de medida
-- Por estado
-- Por fecha prevista
-
-### Menú de Acceso
-
-**Ubicación:** Compras → Informes → Líneas de Compra
-
-**Configuración por defecto:**
-- Muestra solo órdenes confirmadas
-- Vista lista primero, pivot disponible
+```
+┌────────────────────────────────────────────┐
+│ Presupuesto de Venta - PRE/001             │
+├────────────────────────────────────────────┤
+│ Cliente: ABC SA                            │
+│ Fecha: 05/02/2026                          │
+│ Moneda: USD                                │
+│ Tipo de Cambio: 1,250.0000 ←─── Editable  │
+│                                            │
+│ Productos:                                 │
+│  - Producto A   USD $1,000.00              │
+│                                            │
+│ Total: USD $1,000.00                       │
+└────────────────────────────────────────────┘
+        ↓ Chatter
+┌────────────────────────────────────────────┐
+│ Usuario cambió Tipo de Cambio             │
+│  1,180.0000 → 1,250.0000                   │
+│  Hace 2 minutos                            │
+└────────────────────────────────────────────┘
+```
 
 ---
 
-## PARTE 2: Impresión de Facturas en Pesos
+### 2. Impresión en Pesos
 
-### Objetivo
+**Campo:** `print_in_pesos` (Boolean)
 
-Permitir imprimir facturas que están en USD mostrando todos los valores convertidos a pesos argentinos en el PDF, respetando el tipo de cambio de la fecha de factura.
+**Control:** Smart Button en formulario
 
-### Problema que Resuelve
+**Flujo:**
 
-**Escenario:**
-- Empresa argentina compra/vende en USD
-- Contabilidad se lleva en USD
-- Clientes/proveedores necesitan ver valores en pesos
-- No se pueden duplicar facturas (problema fiscal)
+1. **Usuario abre documento en USD**
+   - Smart button aparece automáticamente
+   - Estado inicial: "$ USD | Impresión" (gris)
 
-**Solución:**
-Smart button que activa conversión visual en el PDF sin tocar los datos contables.
+2. **Usuario activa impresión en pesos**
+   - Clic en smart button
+   - Estado cambia: "$ Pesos | Impresión" (negro)
+   - `print_in_pesos = True`
 
-### Modelo: `account.move`
+3. **Al imprimir PDF**
+   - Todos los montos se muestran en ARS
+   - Usa `manual_currency_rate` para conversión
+   - Incluye nota con TC y fecha
 
-**Archivo:** `models/account_move.py`
-
-#### Campo Principal: `print_in_pesos`
-
-```python
-print_in_pesos = fields.Boolean(
-    string='Imprimir en Pesos',
-    default=False,
-    help='Si está marcado y la factura es en moneda extranjera, '
-         'el PDF mostrará los valores convertidos a pesos.',
-)
-```
-
-**Por qué:**
-- Control manual del usuario
-- Solo afecta al PDF, no a los datos
-- Default False para mantener comportamiento estándar
-
-#### Campos Computados
+**Conversión en Reportes:**
 
 ```python
-amount_untaxed_pesos = fields.Monetary(
-    string='Base Imponible (Pesos)',
-    compute='_compute_amounts_pesos',
-    currency_field='company_currency_id',  # Usa campo nativo de account.move
-)
-amount_tax_pesos = fields.Monetary(...)
-amount_total_pesos = fields.Monetary(...)
-```
-
-**Nota:** `account.move` ya tiene el campo `company_currency_id` de forma nativa en Odoo 17.
-
-**Método de cálculo:**
-
-```python
-@api.depends('amount_untaxed', 'amount_tax', 'amount_total',
-             'currency_id', 'company_currency_id', 'invoice_date', 'date')
-def _compute_amounts_pesos(self):
-    for move in self:
-        if move.currency_id != move.company_currency_id:
-            date = move.invoice_date or move.date
-            move.amount_untaxed_pesos = move.currency_id._convert(
-                move.amount_untaxed,
-                move.company_currency_id,
-                move.company_id,
-                date
-            )
-            # ... igual para tax y total
-```
-
-**Por qué invoice_date:**
-Es la fecha oficial del comprobante fiscal, determina el tipo de cambio legal a aplicar.
-
-**Patrón:** Computed fields con `@api.depends()` para recalcular automáticamente cuando cambian los valores base.
-
-#### Método: `_convert_tax_totals_to_pesos()`
-
-**Propósito:**
-Convertir toda la estructura de impuestos (`tax_totals`) de USD a ARS.
-
-**¿Qué contiene tax_totals?**
-- Totales generales (base, impuestos, total)
-- Subtotales por grupo
-- Grupos de impuestos (IVA 21%, IVA 10.5%, etc.)
-- Detalles fiscales argentinos (RG 5614/2024)
-
-**Implementación:**
-
-```python
-def _convert_tax_totals_to_pesos(self, tax_totals_dict):
-    self.ensure_one()
-    tax_totals = copy.deepcopy(tax_totals_dict)  # No mutar original
-
-    currency = self.currency_id
-    company_currency = self.company_currency_id
-    date = self.invoice_date or self.date
-
-    def convert(amount):
-        return currency._convert(amount, company_currency, self.company_id, date)
-
-    def fmt(amount):
-        return formatLang(self.env, amount, currency_obj=company_currency)
-
-    # Convertir totales generales
-    tax_totals['amount_total'] = convert(tax_totals['amount_total'])
-    tax_totals['formatted_amount_total'] = fmt(tax_totals['amount_total'])
-
-    # Convertir subtotales, grupos de impuestos, detalles AR...
-    # (ver código completo en models/account_move.py)
-
-    return tax_totals
-```
-
-**Patrón:** Deep copy para no mutar el diccionario original (inmutabilidad).
-
-**Tip:** Método reutilizable que sirve para cualquier diccionario de tax_totals.
-
-#### Override de Localización Argentina
-
-```python
+# Por qué: Override del método que genera totales para el PDF
 def _l10n_ar_get_invoice_totals_for_report(self):
     result = super()._l10n_ar_get_invoice_totals_for_report()
     if self.print_in_pesos and self._is_foreign_currency():
         return self._convert_tax_totals_to_pesos(result)
     return result
+
+def _convert_tax_totals_to_pesos(self, tax_totals_dict):
+    """Convierte tax_totals usando TC manual."""
+    def convert(amount):
+        # Por qué: Si hay TC manual, lo usa; sino usa TC nativo
+        if self.manual_currency_rate:
+            return amount * self.manual_currency_rate
+        return currency._convert(amount, company_currency, company, date)
+
+    # Convierte: totales, subtotales, impuestos, detalles AR
 ```
 
-**Por qué este override es crítico:**
-- `l10n_ar.report_invoice_document` tiene `primary=True`
-- Es el template que realmente renderiza PDFs en Argentina
-- Heredar de `account.report_invoice_document` NO funcionaría
+**Ejemplo de PDF Generado:**
 
-**Patrón:** Override defensivo
-1. Llama primero al método original (respeta otras customizaciones)
-2. Solo modifica si es necesario (condicional)
-3. Devuelve original si no aplica
-
-### Modelo: `account.move.line`
-
-**Archivo:** `models/account_move_line.py`
-
-#### Campos por Línea
-
-```python
-price_unit_pesos = fields.Monetary(
-    string='Precio Unit. (Pesos)',
-    compute='_compute_amounts_pesos',
-    currency_field='company_currency_id',
-)
-price_subtotal_pesos = fields.Monetary(...)
 ```
+════════════════════════════════════════════════════════════════
+                        PRESUPUESTO PRE/001
+════════════════════════════════════════════════════════════════
+Cliente: ABC SA                          Fecha: 05/02/2026
+Moneda Original: USD | Impreso en: ARS
 
-**Por qué a nivel de línea:**
-Para mostrar cada producto con su precio en pesos en el PDF.
+────────────────────────────────────────────────────────────────
+Descripción              Cantidad    P.Unit.          Subtotal
+────────────────────────────────────────────────────────────────
+Producto A               1.00        $ 1,250,000.00   $ 1,250,000.00
+Producto B               2.00        $   625,000.00   $ 1,250,000.00
 
-#### Override: `_l10n_ar_prices_and_taxes()`
+────────────────────────────────────────────────────────────────
+Subtotal:                                             $ 2,500,000.00
+IVA 21%:                                              $   525,000.00
+════════════════════════════════════════════════════════════════
+TOTAL:                                                $ 3,025,000.00
+════════════════════════════════════════════════════════════════
 
-```python
-def _l10n_ar_prices_and_taxes(self):
-    result = super()._l10n_ar_prices_and_taxes()
-    move = self.move_id
-    if move.print_in_pesos and move._is_foreign_currency():
-        currency = move.currency_id
-        company_currency = move.company_currency_id
-        date = move.invoice_date or move.date
+Valores expresados en ARS — Moneda original: USD
+Tipo de Cambio: 1,250.0000 — Fecha: 05/02/2026
 
-        for key in ('price_unit', 'price_subtotal', 'price_total', 'vat_amount'):
-            if key in result:
-                result[key] = currency._convert(
-                    result[key], company_currency, move.company_id, date)
-    return result
-```
-
-**Por qué es crítico:**
-- `l10n_ar` usa este método para obtener precios ajustados según reglas fiscales AR
-- El template usa estos valores para mostrar precios Y calcular subtotales acumulados
-- Si no se convierte aquí, los totales no cuadran
-
-### Vista: Smart Button
-
-**Archivo:** `views/account_move_views.xml`
-
-```xml
-<button name="action_toggle_print_pesos" type="object"
-        class="oe_stat_button"
-        icon="fa-print"
-        invisible="currency_id == company_currency_id">
-    <div class="o_stat_info">
-        <span class="o_stat_value" invisible="not print_in_pesos">$ Pesos</span>
-        <span class="o_stat_value text-muted" invisible="print_in_pesos">$ USD</span>
-        <span class="o_stat_text">Impresión</span>
-    </div>
-</button>
-```
-
-**Características:**
-- Solo visible en facturas con moneda extranjera
-- Muestra estado actual: "$ Pesos" (activo) o "$ USD" (inactivo)
-- Ejecuta `action_toggle_print_pesos()` que invierte el valor
-
-**Patrón:** `oe_stat_button` es el estándar de Odoo para botones de acción en formularios.
-
-### Reporte: PDF Personalizado
-
-**Archivo:** `report/account_move_report.xml`
-
-**Template heredado:** `l10n_ar.report_invoice_document`
-
-#### Modificaciones Aplicadas
-
-**1. Estilos CSS**
-
-```xml
-<style>
-    .page { font-size: 13px; }
-    table.o_report_block_table tbody td { font-size: 13px; }
-    div#total table.table span { font-size: 14px !important; }
-</style>
-```
-
-**Por qué:** El PDF de Odoo por defecto tiene letra muy pequeña, difícil de leer en papel.
-
-**2. Nota Informativa**
-
-```xml
-<div t-if="o.print_in_pesos and o._is_foreign_currency()">
-    <strong>Moneda Original:</strong> USD |
-    <strong>Impreso en:</strong> ARS
-</div>
-```
-
-**3. Precios de Líneas**
-
-```xml
-<xpath expr='//span[contains(@t-out, "price_unit")]' position="attributes">
-    <attribute name="t-options">{
-        "display_currency": o.company_currency_id if o.print_in_pesos else o.currency_id
-    }</attribute>
-</xpath>
-```
-
-**Por qué solo cambiar display_currency:**
-Los valores ya están en pesos gracias al override de `_l10n_ar_prices_and_taxes()`.
-Solo falta mostrar el símbolo $ correcto.
-
-**4. Tax Totals: NO necesita modificación**
-
-El template llama a `_l10n_ar_get_invoice_totals_for_report()`, ya sobrescrito en Python.
-Los valores vienen convertidos con formato correcto.
-
-**Ventaja:** Código más limpio, lógica en Python, no en XML.
-
-**5. Pagos Asociados**
-
-```xml
-<attribute name="t-out">
-    o.currency_id._convert(payment_vals['amount'], o.company_currency_id, ...)
-    if o.print_in_pesos else payment_vals['amount']
-</attribute>
-```
-
-**6. Monto Residual**
-
-Oculta el original y muestra una versión convertida cuando `print_in_pesos` está activo.
-
-**7. Nota al Pie**
-
-```xml
-<div t-if="o.print_in_pesos">
-    Valores expresados en ARS — Moneda original: USD —
-    T.C. al 15/01/2026: 1150.00
-</div>
+🤖 Generado con Odoo 17.0
 ```
 
 ---
 
-## PARTE 3: Impresión de Presupuestos en Pesos
+### 3. Registración Contable con TC Manual
 
-### Objetivo
+**Problema Resuelto:**
 
-Extender la funcionalidad de impresión en pesos a presupuestos de venta y órdenes de compra.
+En Odoo estándar:
+- Factura en USD $1,000
+- TC nativo de Odoo: 1,180.00
+- Asiento contable: Debit $1,180,000 / Credit $1,180,000
 
-### A. Presupuestos de Venta (sale.order)
+Con TC manual:
+- Factura en USD $1,000
+- TC manual: 1,250.00 (TC real del banco)
+- Asiento contable: Debit $1,250,000 / Credit $1,250,000 ✓
 
-**Archivos:**
-- `models/sale_order.py`
-- `models/sale_order_line.py`
-- `views/sale_order_views.xml`
-- `report/sale_order_report.xml`
-
-#### Modelo: `sale.order`
-
-**Campos agregados:**
+**Implementación Técnica:**
 
 ```python
-print_in_pesos = fields.Boolean(
-    string='Imprimir en Pesos',
-    default=False,
-)
+# Por qué: Interceptar create() para aplicar TC manual al crear factura
+@api.model_create_multi
+def create(self, vals_list):
+    moves = super().create(vals_list)
+    for move in moves:
+        if move.manual_currency_rate and move._is_foreign_currency():
+            move._apply_manual_currency_rate()
+    return moves
 
-# Por qué: Campo relacionado necesario para los campos Monetary que usan currency_field
-# Patrón: Campo related para acceder a company_id.currency_id de forma directa
-company_currency_id = fields.Many2one(
-    'res.currency',
-    string='Moneda de la Compañía',
-    related='company_id.currency_id',
-    readonly=True,
-)
+# Por qué: Interceptar write() para recalcular si cambia el TC
+def write(self, vals):
+    result = super().write(vals)
+    if 'manual_currency_rate' in vals:
+        for move in self:
+            if move.manual_currency_rate and move._is_foreign_currency():
+                move._apply_manual_currency_rate()
+    return result
 
-amount_untaxed_pesos = fields.Monetary(
-    string='Subtotal (Pesos)',
-    compute='_compute_amounts_pesos',
-    currency_field='company_currency_id',
-)
-amount_tax_pesos = fields.Monetary(...)
-amount_total_pesos = fields.Monetary(...)
+def _apply_manual_currency_rate(self):
+    """Aplica TC manual a líneas contables."""
+    self.ensure_one()
+    # Por qué: Filtrar líneas con amount_currency (en USD)
+    for line in self.line_ids.filtered(
+        lambda l: l.amount_currency and l.currency_id == self.currency_id
+    ):
+        # Por qué: Calcular balance con TC manual
+        balance = line.amount_currency * self.manual_currency_rate
+        # Por qué: write() triggera recálculo automático de debit/credit
+        line.with_context(check_move_validity=False).write({
+            'balance': balance,
+        })
 ```
 
-**Por qué company_currency_id:**
-- Los campos Monetary requieren especificar un `currency_field`
-- Este campo debe existir en el modelo (Many2one a res.currency)
-- Se define como `related` para acceder a la moneda de la compañía
+**Flujo de Registración:**
 
-**Método de cálculo:**
+```
+Presupuesto USD $1,000 con TC manual 1,250
+            ↓
+Crear Factura (copia TC = 1,250)
+            ↓
+create() ejecuta _apply_manual_currency_rate()
+            ↓
+Para cada línea contable:
+  - Producto: amount_currency = -$1,000 (USD)
+    → balance = -$1,000 × 1,250 = -$1,250,000
+    → credit = $1,250,000, debit = $0
+
+  - Cliente: amount_currency = $1,000 (USD)
+    → balance = $1,000 × 1,250 = $1,250,000
+    → debit = $1,250,000, credit = $0
+            ↓
+Asiento balanceado: Debit = Credit = $1,250,000 ✓
+```
+
+**Protección contra Desbalanceo:**
 
 ```python
-@api.depends('amount_untaxed', 'amount_tax', 'amount_total',
-             'currency_id', 'pricelist_id.currency_id', 'date_order')
-def _compute_amounts_pesos(self):
-    for order in self:
-        # Compara con pricelist_id.currency_id
-        if order.currency_id != order.pricelist_id.currency_id:
-            date = order.date_order
-            # Conversión usando date_order
+# Contexto especial para evitar validación prematura
+line.with_context(check_move_validity=False).write({
+    'balance': balance,
+})
+
+# Por qué:
+# - Odoo valida que debit = credit después de cada write()
+# - Al recalcular línea por línea, temporalmente está desbalanceado
+# - check_move_validity=False suspende la validación
+# - Al final, todas las líneas están recalculadas y el asiento balancea
 ```
 
-**Diferencia con facturas:**
-- Usa `pricelist_id.currency_id` como moneda base
-- Usa `date_order` en lugar de `invoice_date`
+---
 
-#### Modelo: `sale.order.line`
+### 4. Análisis de Órdenes de Compra
 
-Similar a `account.move.line`:
+**Objetivo:** Facilitar análisis multidimensional de compras
+
+**Vistas Implementadas:**
+
+1. **Vista Lista**
+   - Todas las líneas de órdenes de compra
+   - Filtros: Estado, Proveedor, Categoría, Fecha
+   - Suma automática de cantidades y subtotales
+
+2. **Vista Pivot**
+   - Análisis tipo tabla dinámica
+   - Agrupaciones: Moneda, Proveedor, Categoría, Producto, Mes
+   - Medidas: Cantidad comprada, Subtotal
+
+3. **Menú:** Compras → Informes → Líneas de Compra
+
+**Campos Agregados:**
 
 ```python
-price_unit_pesos = fields.Monetary(...)
-price_subtotal_pesos = fields.Monetary(...)
-
-@api.depends('price_unit', 'price_subtotal', 'currency_id', 'order_id.date_order')
-def _compute_amounts_pesos(self):
-    # Conversión por línea
-```
-
-#### Vista: Smart Button
-
-```xml
-<button name="action_toggle_print_pesos"
-        icon="fa-print"
-        invisible="currency_id == pricelist_id.currency_id">
-    <!-- Estado visual -->
-</button>
-```
-
-**Diferencia:** Invisibilidad basada en comparación con `pricelist_id.currency_id`.
-
-#### Reporte: PDF
-
-**Template heredado:** `sale.report_saleorder_document`
-
-**Modificaciones:**
-1. Estilos CSS (igual que facturas)
-2. Nota informativa con moneda original
-3. Precios de líneas con `display_currency` condicional
-4. Totales usando campos computados `*_pesos`
-5. Nota al pie con tipo de cambio
-
-**Diferencia con facturas:**
-No hay override de métodos especiales (no existe `_get_sale_totals_for_report()`).
-Usa campos computados directamente en el template.
-
-### B. Órdenes de Compra (purchase.order)
-
-**Archivos:**
-- `models/purchase_order.py`
-- `models/purchase_order_line.py` (modificado)
-- `views/purchase_order_views.xml`
-- `report/purchase_order_report.xml`
-
-#### Modelo: `purchase.order`
-
-**Campos agregados:**
-
-```python
-print_in_pesos = fields.Boolean(
-    string='Imprimir en Pesos',
-    default=False,
+# En purchase.order.line
+product_categ_id = fields.Many2one(
+    'product.category',
+    related='product_id.categ_id',
+    store=True,  # ← Crítico para pivot
 )
 
-# Por qué: Campo relacionado necesario para los campos Monetary que usan currency_field
-# Patrón: Campo related para acceder a company_id.currency_id de forma directa
-company_currency_id = fields.Many2one(
-    'res.currency',
-    string='Moneda de la Compañía',
-    related='company_id.currency_id',
-    readonly=True,
+product_uom_id = fields.Many2one(
+    'uom.uom',
+    related='product_id.uom_id',
+    store=True,
 )
-
-amount_untaxed_pesos = fields.Monetary(
-    string='Subtotal (Pesos)',
-    compute='_compute_amounts_pesos',
-    currency_field='company_currency_id',
-)
-amount_tax_pesos = fields.Monetary(...)
-amount_total_pesos = fields.Monetary(...)
-
-@api.depends('amount_untaxed', 'amount_tax', 'amount_total',
-             'currency_id', 'company_id.currency_id', 'date_order')
-def _compute_amounts_pesos(self):
-    # Usa company_id.currency_id como base
-    # Usa date_order para conversión
 ```
 
-**Diferencia con ventas:**
-- Compara con `company_id.currency_id` (no con pricelist)
-- Purchase no usa pricelist, usa moneda de la compañía directamente
-
-#### Modelo: `purchase.order.line`
-
-**MODIFICACIÓN del archivo existente:**
-
-El archivo ya existe con campos `product_categ_id` y `product_uom_id`.
-Se agregan:
-
-```python
-price_unit_pesos = fields.Monetary(...)
-price_subtotal_pesos = fields.Monetary(...)
-
-@api.depends(...)
-def _compute_amounts_pesos(self):
-    # Conversión por línea
-```
-
-#### Vista: Smart Button
-
-```xml
-<button name="action_toggle_print_pesos"
-        icon="fa-print"
-        invisible="currency_id == company_id.currency_id">
-    <!-- Estado visual -->
-</button>
-```
-
-#### Reporte: PDF
-
-**Template heredado:** `purchase.report_purchaseorder_document`
-
-**Modificaciones idénticas a sale.order:**
-- Estilos CSS
-- Nota informativa
-- Precios con display_currency condicional
-- Totales en pesos
-- Nota al pie con TC
+**Por qué store=True:**
+- Permite agrupaciones en pivot sin joins complejos
+- Mejora performance en reportes con muchas líneas
+- Permite índices en base de datos
 
 ---
 
 ## Arquitectura Técnica
 
-### Patrón de Herencia de Odoo
+### Modelos Extendidos
 
 ```python
+# Patrón: Herencia por extensión (no crea tablas nuevas)
 class AccountMove(models.Model):
     _inherit = 'account.move'
+
+    # Nuevos campos
+    print_in_pesos = fields.Boolean(...)
+    manual_currency_rate = fields.Float(...)
+    amount_untaxed_pesos = fields.Monetary(compute='...')
+    amount_tax_pesos = fields.Monetary(compute='...')
+    amount_total_pesos = fields.Monetary(compute='...')
+
+    # Métodos sobrescritos
+    def _l10n_ar_get_invoice_totals_for_report(self): ...
+    def create(self, vals_list): ...
+    def write(self, vals): ...
+    def _recompute_dynamic_lines(self, ...): ...
+
+    # Métodos nuevos
+    def _apply_manual_currency_rate(self): ...
+    def _convert_tax_totals_to_pesos(self, tax_totals_dict): ...
+    def action_toggle_print_pesos(self): ...
+    def _is_foreign_currency(self): ...
 ```
 
-**Tipo:** Herencia por extensión
+### Flujo de Datos: Presupuesto → Factura
 
-**Ventajas:**
-- No crea tablas nuevas
-- Agrega campos y métodos a modelos existentes
-- Permite sobrescribir métodos (override)
-- Respeta otras customizaciones
+```
+┌─────────────────────────────────────────────────────────────┐
+│ PRESUPUESTO DE VENTA (sale.order)                          │
+├─────────────────────────────────────────────────────────────┤
+│ • currency_id = USD                                         │
+│ • date_order = 05/02/2026                                   │
+│ • manual_currency_rate = 1,250.0000 (usuario lo editó)     │
+│ • print_in_pesos = True                                     │
+│ • amount_total = USD $1,000.00                              │
+│ • amount_total_pesos = $ 1,250,000.00 (computed)            │
+└─────────────────────────────────────────────────────────────┘
+                        ↓
+            Usuario → Crear Factura
+                        ↓
+    _prepare_invoice() ← Override de sale.order
+                        ↓
+    invoice_vals = {
+        'partner_id': ...,
+        'currency_id': USD,
+        'invoice_date': 05/02/2026,
+        'manual_currency_rate': 1,250.0000,  ← Copiado
+        'invoice_line_ids': [...],
+    }
+                        ↓
+    account.move.create(invoice_vals)
+                        ↓
+┌─────────────────────────────────────────────────────────────┐
+│ FACTURA (account.move)                                      │
+├─────────────────────────────────────────────────────────────┤
+│ • currency_id = USD                                         │
+│ • invoice_date = 05/02/2026                                 │
+│ • manual_currency_rate = 1,250.0000 ← Preservado           │
+│ • print_in_pesos = False (default, usuario puede activar)  │
+│ • amount_total = USD $1,000.00                              │
+│                                                             │
+│ Líneas contables (account.move.line):                      │
+│   1. Cliente (Cuenta por cobrar)                            │
+│      amount_currency = USD $1,000.00                        │
+│      balance = $ 1,250,000.00 ← TC manual aplicado          │
+│      debit = $ 1,250,000.00                                 │
+│      credit = $0                                            │
+│                                                             │
+│   2. Ingreso (Venta)                                        │
+│      amount_currency = USD -$1,000.00                       │
+│      balance = $ -1,250,000.00 ← TC manual aplicado         │
+│      debit = $0                                             │
+│      credit = $ 1,250,000.00                                │
+│                                                             │
+│ Balance: ✓ Debit ($1,250,000) = Credit ($1,250,000)        │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Campos Computados con Dependencias
+### Métodos Clave
+
+#### 1. Conversión con TC Manual
 
 ```python
-@api.depends('amount_untaxed', 'currency_id', 'invoice_date')
-def _compute_amounts_pesos(self):
-    ...
+def _convert_tax_totals_to_pesos(self, tax_totals_dict):
+    """Convierte tax_totals a pesos usando TC manual.
+
+    Por qué: Método reutilizable para convertir cualquier dict de totales.
+    Patrón: Deep copy para no mutar el original (inmutabilidad).
+    """
+    self.ensure_one()
+    tax_totals = copy.deepcopy(tax_totals_dict)
+
+    def convert(amount):
+        # Por qué: Priorizar TC manual sobre TC nativo
+        if self.manual_currency_rate:
+            return amount * self.manual_currency_rate
+        return currency._convert(amount, company_currency, company, date)
+
+    def fmt(amount):
+        return formatLang(self.env, amount, currency_obj=company_currency)
+
+    # Convertir estructura completa
+    tax_totals['amount_total'] = convert(tax_totals['amount_total'])
+    tax_totals['formatted_amount_total'] = fmt(tax_totals['amount_total'])
+    # ... (subtotales, grupos de impuestos, detalles AR)
+
+    return tax_totals
 ```
 
-**¿Cómo funciona?**
-- `@api.depends()` declara qué campos disparan el recálculo
-- Cuando cambia `invoice_date`, Odoo recalcula automáticamente
-- Usa el tipo de cambio del nuevo día
-- No se almacena en BD (computed on-the-fly)
-
-**Patrón:** Observer pattern (reactividad)
-
-### Conversión de Moneda Estándar de Odoo
+#### 2. Aplicación de TC a Líneas Contables
 
 ```python
-currency_id._convert(
-    amount,              # Monto a convertir
-    target_currency,     # Moneda destino
-    company,            # Compañía (para tasas específicas)
-    date                # Fecha para buscar el TC
-)
+def _apply_manual_currency_rate(self):
+    """Recalcula debit/credit de líneas contables con TC manual.
+
+    Por qué: Garantiza que los asientos usen TC manual, no TC nativo.
+    Patrón: Filtrado + contexto especial para evitar validación prematura.
+    """
+    self.ensure_one()
+
+    for line in self.line_ids.filtered(
+        lambda l: l.amount_currency and l.currency_id == self.currency_id
+    ):
+        balance = line.amount_currency * self.manual_currency_rate
+
+        # Por qué: write() triggera recálculo de debit/credit desde balance
+        # check_move_validity=False evita validación mientras recalculamos
+        line.with_context(check_move_validity=False).write({
+            'balance': balance,
+        })
 ```
 
-**Por qué usar el método estándar:**
-- Busca en `res.currency.rate` automáticamente
-- Respeta configuración multicompañía
-- Maneja redondeos correctamente
-- Compatible con otras customizaciones
-
-### Deep Copy para Inmutabilidad
-
-```python
-tax_totals = copy.deepcopy(tax_totals_dict)
-```
-
-**Por qué:**
-- No modifica el diccionario original
-- Previene efectos secundarios
-- Otro módulo puede usar ese diccionario después
-
-**Patrón:** Inmutabilidad (functional programming)
-
-### Override Defensivo
+#### 3. Override de Reportes l10n_ar
 
 ```python
 def _l10n_ar_get_invoice_totals_for_report(self):
+    """Override para PDFs argentinos.
+
+    Por qué: l10n_ar.report_invoice_document tiene primary=True.
+    Es el template que realmente se usa en Argentina.
+    Heredar de account.report_invoice_document NO funcionaría.
+    """
     result = super()._l10n_ar_get_invoice_totals_for_report()
+
     if self.print_in_pesos and self._is_foreign_currency():
         return self._convert_tax_totals_to_pesos(result)
+
     return result
 ```
 
-**Patrón:** Template Method Pattern
+### Patrones de Diseño Aplicados
 
-**Ventajas:**
-1. Respeta el comportamiento original (super())
-2. Solo modifica cuando aplica (if condicional)
-3. Fácil de debuggear
-4. Compatible con otros módulos
+**1. Template Method Pattern**
+```python
+def method(self):
+    result = super().method()  # ← Llama original
+    # Modifica result
+    return result
+```
+- Respeta comportamiento base
+- Agrega funcionalidad sin romper original
+- Compatible con otros módulos
 
-### Separación de Responsabilidades
+**2. Strategy Pattern (Conversión)**
+```python
+def convert(amount):
+    if self.manual_currency_rate:
+        return amount * self.manual_currency_rate  # ← Estrategia manual
+    return currency._convert(...)  # ← Estrategia estándar
+```
+- Selecciona estrategia de conversión en runtime
+- Fácil de extender (ej: agregar más estrategias)
 
-**Modelo (Python):**
-- Lógica de negocio
-- Cálculos y conversiones
-- Validaciones
+**3. Observer Pattern (Computed Fields)**
+```python
+@api.depends('amount_total', 'manual_currency_rate')
+def _compute_amounts_pesos(self):
+    # Se ejecuta automáticamente cuando cambian dependencias
+```
+- Reactividad automática
+- Sincronización de datos
+- Reduce código manual
 
-**Vista (XML):**
-- Interfaz de usuario
-- Smart buttons
-- Campos visibles
-
-**Reporte (XML):**
-- Presentación
-- Formato de impresión
-- Estilos CSS
-
-**Ventaja:** Cada componente tiene una responsabilidad clara.
+**4. Immutability Pattern**
+```python
+tax_totals = copy.deepcopy(tax_totals_dict)  # ← No mutar original
+```
+- Previene efectos secundarios
+- Facilita debugging
+- Más seguro en sistemas concurrentes
 
 ---
 
 ## Flujos de Uso
 
-### Caso 1: Factura de Proveedor USD $1,000
+### Caso 1: Presupuesto en USD con TC Específico
 
-**Contexto:**
-- Proveedor: Empresa de USA
-- Factura: USD $1,000 + IVA 21% = $1,210
-- Tipo de cambio: 1150 ARS/USD
-- Fecha: 15/01/2026
-
-**Flujo:**
-
-1. **Usuario crea factura de proveedor**
-   - Menú: Contabilidad → Proveedores → Facturas
-   - Proveedor: USA Corp
-   - Moneda: USD
-   - Producto: Servicio técnico - $1,000
-   - IVA: 21%
-
-2. **Smart button aparece automáticamente**
-   - Muestra: "$ USD | Impresión" (gris)
-   - Solo visible porque currency_id != company_currency_id
-
-3. **Usuario activa impresión en pesos**
-   - Clic en smart button
-   - Cambia a: "$ Pesos | Impresión" (negro)
-   - `print_in_pesos = True`
-
-4. **Usuario imprime PDF**
-
-   **Header:**
-   ```
-   Moneda Original: USD | Impreso en: ARS
-   ```
-
-   **Líneas:**
-   ```
-   Descripción              Cant.    P.Unit.         Subtotal
-   Servicio técnico         1.00     $ 1,150,000.00  $ 1,150,000.00
-   ```
-
-   **Totales:**
-   ```
-   Base Imponible:          $ 1,150,000.00
-   IVA 21%:                 $   241,500.00
-   ────────────────────────────────────────
-   Total:                   $ 1,391,500.00
-   ```
-
-   **Pie:**
-   ```
-   Valores expresados en ARS — Moneda original: USD —
-   T.C. al 15/01/2026: 1150.00
-   ```
-
-5. **Si desactiva el botón**
-   - Vuelve a imprimir en USD normalmente
-   - Sin conversión
-
-### Caso 2: Presupuesto de Venta USD $500
-
-**Contexto:**
-- Cliente: Empresa local que pide presupuesto
-- Precio: USD $500 (sin IVA para simplificar)
-- Tipo de cambio: 1180 ARS/USD
-- Fecha: 04/02/2026
+**Escenario:**
+- Cliente local solicita presupuesto
+- Precios en USD (estabilidad)
+- Cliente necesita aprobación interna en ARS
+- TC del día: 1,180 ARS/USD (oficial)
+- TC del banco: 1,250 ARS/USD (real)
 
 **Flujo:**
 
-1. **Usuario crea presupuesto**
-   - Menú: Ventas → Presupuestos
-   - Cliente: Cliente Local SA
-   - Tarifa: USD Pricelist
-   - Producto: Consultoría - $500
+```
+1. Usuario crea presupuesto
+   ├─ Ventas → Presupuestos → Crear
+   ├─ Cliente: ABC SA
+   ├─ Moneda: USD (desde pricelist)
+   └─ Producto: Consultoría - USD $1,000
 
-2. **Smart button disponible**
-   - Muestra: "$ USD | Impresión"
+2. Campo TC se auto-completa
+   ├─ manual_currency_rate = 1,180.00 (TC oficial de la fecha)
+   └─ Usuario lo edita manualmente a 1,250.00 (TC real del banco)
 
-3. **Usuario activa print_in_pesos**
-   - Clic en botón
-   - Cambia a: "$ Pesos | Impresión"
+   → Chatter registra:
+     "Usuario cambió Tipo de Cambio: 1,180.0000 → 1,250.0000"
 
-4. **Usuario envía PDF al cliente**
+3. Usuario activa impresión en pesos
+   ├─ Clic en Smart Button
+   └─ Estado: "$ Pesos | Impresión" ✓
 
-   **Header:**
-   ```
-   Moneda Original: USD | Impreso en: ARS
-   ```
+4. Usuario imprime y envía PDF
+   ├─ Muestra: Total $ 1,250,000.00
+   ├─ Nota: "TC: 1,250.0000 - Fecha: 05/02/2026"
+   └─ Cliente aprueba basándose en monto en ARS
 
-   **Líneas:**
-   ```
-   Producto              Cant.    P.Unit.       Subtotal
-   Consultoría           1.00     $ 590,000.00  $ 590,000.00
-   ```
+5. Usuario confirma presupuesto
+   └─ Estado: Orden de Venta
 
-   **Totales:**
-   ```
-   Total: $ 590,000.00
-   ```
+6. Usuario crea factura desde presupuesto
+   ├─ Presupuesto → Crear Factura
+   ├─ TC copiado automáticamente: 1,250.00 ✓
+   └─ Asientos contables usan TC 1,250.00 (no 1,180.00)
 
-   **Pie:**
-   ```
-   Valores expresados en ARS — Moneda original: USD —
-   T.C. al 04/02/2026: 1180.00
-   ```
+7. Registración contable final
+   ├─ Debit (Clientes): $ 1,250,000.00
+   ├─ Credit (Ingresos): $ 1,250,000.00
+   └─ Balance cuadra con TC real del banco ✓
+```
 
-5. **Cliente aprueba y se confirma**
-   - Al confirmar, contabilidad sigue en USD
-   - Solo el PDF mostró valores en ARS
+---
 
-### Caso 3: Orden de Compra Multimoneda
+### Caso 2: Factura de Proveedor con TC Acordado
 
-**Contexto:**
-- Proveedor con productos en USD y ARS
-- Orden: Repuestos en USD
-- Necesita PDF en pesos para aprobación interna
+**Escenario:**
+- Proveedor extranjero
+- Factura en USD $5,000
+- TC acordado contractualmente: 1,200 ARS/USD
+- TC oficial del día: 1,180 ARS/USD
 
 **Flujo:**
 
-1. **Crear orden de compra**
-   - Moneda: USD
-   - Producto A: USD $100 x 10 = $1,000
-   - Producto B: USD $50 x 5 = $250
-   - Total: USD $1,250
+```
+1. Usuario crea factura de proveedor
+   ├─ Contabilidad → Proveedores → Facturas
+   ├─ Proveedor: USA Corp
+   ├─ Moneda: USD
+   └─ Monto: USD $5,000
 
-2. **Activar print_in_pesos**
+2. Campo TC se auto-completa
+   ├─ manual_currency_rate = 1,180.00 (TC oficial)
+   └─ Usuario lo edita a 1,200.00 (TC contractual)
 
-3. **Imprimir para aprobación gerencia**
-   - Gerencia ve: $ 1,437,500.00 (TC: 1150)
-   - Aprueba basándose en monto en pesos
-   - Orden sigue en USD en el sistema
+3. Usuario valida factura
+   └─ Asientos contables:
+       ├─ Debit (Gastos): $ 6,000,000.00  (5,000 × 1,200)
+       └─ Credit (Proveedores): $ 6,000,000.00
 
-4. **Confirmar orden**
-   - Factura llegará en USD
-   - Se podrá imprimir en pesos también
+4. Al pagar la factura
+   ├─ Pago efectivo: $ 6,000,000.00
+   └─ Concilia perfectamente con el asiento (mismo TC) ✓
+
+5. Auditoría
+   └─ Chatter muestra: "TC modificado a 1,200.0000"
+       Justificación: TC acordado en contrato
+```
 
 ---
 
-## Buenas Prácticas Aplicadas
+### Caso 3: Análisis de Compras Multimoneda
 
-### 1. Uso de Métodos Estándar de Odoo
+**Escenario:**
+- Empresa compra en USD y ARS
+- Necesita análisis mensual por categoría
 
-```python
-# ✅ BIEN: Usar método estándar
-currency_id._convert(amount, target, company, date)
+**Flujo:**
 
-# ❌ MAL: Calcular manualmente
-amount * exchange_rate
 ```
+1. Usuario accede al análisis
+   └─ Compras → Informes → Líneas de Compra
 
-**Por qué:**
-- Respeta configuración de redondeo
-- Maneja multicompañía
-- Compatible con otros módulos
+2. Cambia a vista Pivot
+   └─ Botón: [ Lista | Pivot | Gráfico ]
 
-### 2. Store=True en Campos Relacionados
+3. Configura agrupaciones
+   ├─ Filas: Categoría de Producto
+   ├─ Columnas: Fecha Prevista (Mes)
+   └─ Medida: Subtotal
 
-```python
-product_categ_id = fields.Many2one(
-    related='product_id.categ_id',
-    store=True,  # ✅ Mejora performance
-)
+4. Aplica filtro
+   └─ Moneda = USD
+
+5. Resultado
+   ┌─────────────────┬─────────┬─────────┬─────────┐
+   │ Categoría       │ Enero   │ Febrero │ Total   │
+   ├─────────────────┼─────────┼─────────┼─────────┤
+   │ Materia Prima   │ $10,000 │ $15,000 │ $25,000 │
+   │ Servicios       │  $5,000 │  $8,000 │ $13,000 │
+   │ TOTAL           │ $15,000 │ $23,000 │ $38,000 │
+   └─────────────────┴─────────┴─────────┴─────────┘
+
+6. Usuario exporta a Excel
+   └─ Botón: Descargar
 ```
-
-**Ventaja:**
-- Consultas SQL más rápidas
-- Permite agrupaciones sin joins
-- Índices en BD
-
-### 3. Campos Computados Sin Store
-
-```python
-amount_total_pesos = fields.Monetary(
-    compute='_compute_amounts_pesos',
-    # store=False (por defecto)
-)
-```
-
-**Por qué NO store:**
-- Se recalcula con TC actualizado
-- No ocupa espacio en BD
-- Siempre refleja valores actuales
-
-### 4. Validaciones Defensivas
-
-```python
-def _compute_amounts_pesos(self):
-    for move in self:  # ✅ Itera por registro
-        if move.currency_id != move.company_currency_id:  # ✅ Valida
-            # conversión
-        else:
-            # sin conversión
-```
-
-**Patrón:**
-- Siempre iterar con `for`
-- Validar condiciones antes de operar
-- Manejar caso contrario (else)
-
-### 5. Override con super()
-
-```python
-def _l10n_ar_get_invoice_totals_for_report(self):
-    result = super()._l10n_ar_get_invoice_totals_for_report()  # ✅ Llama original
-    # Modifica result
-    return result
-```
-
-**Ventaja:**
-- Respeta otras customizaciones
-- Compatible con módulos de terceros
-- Fácil de debuggear
-
-### 6. Deep Copy en Diccionarios
-
-```python
-tax_totals = copy.deepcopy(tax_totals_dict)  # ✅ Copia profunda
-```
-
-**Evita:**
-```python
-tax_totals = tax_totals_dict  # ❌ Referencia, mutará el original
-```
-
-### 7. Comentarios Didácticos
-
-```python
-# Por qué: invoice_date es la fecha del comprobante (la que importa para el TC)
-date = move.invoice_date or move.date
-
-# Patrón: Deep copy para no mutar el dict original
-tax_totals = copy.deepcopy(tax_totals_dict)
-
-# Tip: formatLang respeta el idioma del usuario
-formatted = formatLang(self.env, amount, currency_obj=currency)
-```
-
-**Estructura:**
-- **Por qué:** Explica la razón de la decisión
-- **Patrón:** Nombra el patrón de diseño usado
-- **Tip:** Consejo para aprender
-
-### 8. Invisible en Vistas
-
-```xml
-<!-- ✅ BIEN: Campo en vista para usar en attrs -->
-<field name="print_in_pesos" invisible="1"/>
-
-<button invisible="currency_id == company_currency_id">
-```
-
-**Por qué:**
-- Odoo 17 exige que campos usados en attrs estén en la vista
-- `invisible="1"` oculta pero carga el valor
-
-### 9. Herencia de Templates
-
-```xml
-<!-- ✅ BIEN: Heredar del template correcto -->
-<template id="report_invoice_document_pesos"
-          inherit_id="l10n_ar.report_invoice_document">
-
-<!-- ❌ MAL: Heredar del genérico no funciona en AR -->
-<template inherit_id="account.report_invoice_document">
-```
-
-**Por qué:**
-- `l10n_ar.report_invoice_document` tiene `primary=True`
-- Es el que realmente se usa en Argentina
-
-### 10. XPath Específicos
-
-```xml
-<!-- ✅ BIEN: XPath específico -->
-<xpath expr='//span[contains(@t-out, "price_unit")]' position="attributes">
-
-<!-- ❌ MAL: XPath genérico que puede romper -->
-<xpath expr='//span' position="attributes">
-```
-
-**Ventaja:**
-- Solo modifica el elemento deseado
-- No afecta otros spans
-- Más robusto ante cambios
 
 ---
 
-## Comparación de Implementaciones
+## Instalación y Configuración
 
-### Facturas vs Presupuestos
+### Requisitos
 
-| Aspecto | Facturas (account.move) | Presupuestos Venta | Órdenes Compra |
-|---------|------------------------|-------------------|----------------|
-| **Moneda base** | `company_currency_id` | `pricelist_id.currency_id` | `company_id.currency_id` |
-| **Fecha conversión** | `invoice_date` | `date_order` | `date_order` |
-| **Template** | `l10n_ar.report_invoice_document` | `sale.report_saleorder_document` | `purchase.report_purchaseorder_document` |
-| **Override totales** | `_l10n_ar_get_invoice_totals_for_report()` | No existe | No existe |
-| **Override líneas** | `_l10n_ar_prices_and_taxes()` | No existe | No existe |
-| **Complejidad fiscal** | Alta (tax_totals, l10n_ar) | Media (totales simples) | Media (totales simples) |
-| **Depende de l10n_ar** | ✅ Sí (crítico) | ❌ No | ❌ No |
+**Odoo:** 17.0 Enterprise
 
----
-
-## Dependencias Críticas
-
-### l10n_ar (Localización Argentina)
-
-**¿Por qué es crítica para facturas?**
-
-1. Define `l10n_ar.report_invoice_document` con `primary=True`
-2. Ese template es el que se usa en Argentina (no el estándar)
-3. Heredar de `account.report_invoice_document` NO afecta al PDF argentino
-
-**Métodos específicos de l10n_ar:**
-- `_l10n_ar_get_invoice_totals_for_report()`: Totales del reporte
-- `_l10n_ar_prices_and_taxes()`: Precios ajustados según reglas AR
-- Manejo de RG 5614/2024 (Transparencia Fiscal)
-
-**Para presupuestos:**
-No es crítica, solo se usa el módulo estándar de Odoo.
-
----
-
-## Estructura del Módulo
-
+**Dependencias:**
+```python
+'depends': ['purchase', 'account', 'sale', 'l10n_ar']
 ```
-surtecnica-reportes-dolar-peso/
-├── __init__.py
-├── __manifest__.py
-├── README.md
-│
-├── models/
-│   ├── __init__.py
-│   ├── account_move.py              # Facturas
-│   ├── account_move_line.py         # Líneas de factura
-│   ├── purchase_order.py            # Órdenes de compra
-│   ├── purchase_order_line.py       # Líneas de orden (análisis + pesos)
-│   ├── sale_order.py                # Presupuestos de venta
-│   └── sale_order_line.py           # Líneas de presupuesto
-│
-├── views/
-│   ├── account_move_views.xml       # Smart button facturas
-│   ├── purchase_order_line_views.xml # Vistas análisis + smart button
-│   ├── purchase_order_views.xml     # Smart button órdenes
-│   └── sale_order_views.xml         # Smart button presupuestos
-│
-└── report/
-    ├── account_move_report.xml      # PDF facturas en pesos
-    ├── purchase_order_report.xml    # PDF órdenes en pesos
-    └── sale_order_report.xml        # PDF presupuestos en pesos
+
+- `purchase`: Órdenes de compra
+- `account`: Facturas y contabilidad
+- `sale`: Presupuestos de venta
+- `l10n_ar`: Localización Argentina (**crítico para facturas**)
+
+### Instalación
+
+1. **Clonar/copiar módulo**
+   ```bash
+   cd /path/to/odoo/addons
+   git clone <repo-url> surtecnica-reportes-dolar-peso
+   ```
+
+2. **Actualizar lista de aplicaciones**
+   ```
+   Aplicaciones → Actualizar Lista de Aplicaciones
+   ```
+
+3. **Instalar módulo**
+   ```
+   Aplicaciones → Buscar "Reportes Dólar/Peso"
+   → Instalar
+   ```
+
+4. **Verificar instalación**
+   - Abrir factura en USD
+   - Verificar presencia de smart button "Impresión"
+   - Verificar campo "Tipo de Cambio"
+
+### Configuración Inicial
+
+**1. Configurar Tipos de Cambio**
 ```
+Contabilidad → Configuración → Monedas
+→ Seleccionar USD
+→ Ver Tasas
+→ Agregar tasas para fechas relevantes
+```
+
+**2. Configurar Pricelist en USD (para ventas)**
+```
+Ventas → Configuración → Tarifas
+→ Crear "Tarifa USD"
+→ Moneda: USD
+→ Asignar a clientes que operan en USD
+```
+
+**3. Configurar Proveedores USD**
+```
+Compras → Proveedores
+→ Editar proveedor
+→ Moneda de Compra: USD
+```
+
+### Permisos
+
+No requiere permisos especiales. Los usuarios con acceso a:
+- Ventas: Pueden usar funcionalidad en presupuestos
+- Compras: Pueden usar funcionalidad en órdenes
+- Contabilidad: Pueden usar funcionalidad en facturas
 
 ---
 
 ## Troubleshooting
 
-### Problema: Smart button no aparece
+### Problema 1: Smart Button No Aparece
+
+**Síntomas:**
+- Documento en USD pero no se ve el smart button
 
 **Causas posibles:**
-1. Factura/presupuesto está en la misma moneda que la compañía
-2. Vista XML no heredó correctamente
-3. Campo `print_in_pesos` no está en la vista (Odoo 17 lo exige)
 
-**Solución:**
-```xml
-<!-- Agregar campo invisible -->
-<field name="print_in_pesos" invisible="1"/>
-```
+1. **Moneda igual a moneda de compañía**
+   ```python
+   # El botón está invisible cuando:
+   invisible="currency_id == company_currency_id"
+   ```
+   **Solución:** Verificar que el documento esté en USD, no en ARS
 
-### Problema: PDF sigue mostrando USD
+2. **Vista no actualizada**
+   **Solución:**
+   ```
+   Modo desarrollador → Actualizar vista → Recargar página
+   ```
 
-**Causas posibles:**
-1. `print_in_pesos` no está marcado
-2. Template heredó del incorrecto (usar `l10n_ar.report_invoice_document` para facturas)
-3. Override de Python no se ejecuta
+3. **Campo print_in_pesos no está en la vista**
+   **Solución:** Verificar en XML:
+   ```xml
+   <field name="print_in_pesos" invisible="1"/>
+   ```
 
-**Debug:**
-```python
-# Agregar en _compute_amounts_pesos
-_logger.info(f"Convirtiendo {self.amount_total} a pesos")
-```
+### Problema 2: TC Manual No Se Copia a Factura
 
-### Problema: Totales no cuadran
+**Síntomas:**
+- Presupuesto tiene TC 1,250
+- Factura creada tiene TC 1,180 (TC oficial)
 
 **Causa:**
-No se sobrescribió `_l10n_ar_prices_and_taxes()` en líneas de factura.
+El onchange sobrescribe el valor copiado
+
+**Diagnóstico:**
+```python
+# En account_move.py, verificar:
+@api.onchange('currency_id', 'company_id', 'invoice_date', 'date')
+def _onchange_currency_rate(self):
+    for move in self:
+        if not move.manual_currency_rate:  # ← Debe tener esta validación
+            # Solo calcular si no hay TC manual
+```
 
 **Solución:**
-El override DEBE convertir todos los valores: `price_unit`, `price_subtotal`, `price_total`, `vat_amount`.
+El código ya tiene protección, verificar que esté actualizado
 
-### Problema: Tipo de cambio incorrecto
+### Problema 3: Asiento Desbalanceado
 
-**Causas posibles:**
-1. No hay tasa configurada para esa fecha
-2. Se usa fecha incorrecta (debe ser `invoice_date` o `date_order`)
+**Síntomas:**
+```
+Error: El movimiento no está saldado.
+Total débito: $0
+Total crédito: $1,250,000
+```
+
+**Causa:**
+Problema en `_apply_manual_currency_rate()`
+
+**Diagnóstico:**
+```python
+# Verificar que use write() con contexto:
+line.with_context(check_move_validity=False).write({
+    'balance': balance,
+})
+```
 
 **Solución:**
-Verificar en: Contabilidad → Configuración → Monedas → Tasas
+Verificar versión del módulo, debe tener el fix del contexto
+
+### Problema 4: PDF Sigue Mostrando USD
+
+**Síntomas:**
+- `print_in_pesos = True`
+- PDF muestra USD $1,000 en lugar de $ 1,250,000
+
+**Diagnóstico:**
+
+1. **Verificar template correcto (facturas)**
+   ```xml
+   <!-- CORRECTO -->
+   <template id="..." inherit_id="l10n_ar.report_invoice_document">
+
+   <!-- INCORRECTO -->
+   <template id="..." inherit_id="account.report_invoice_document">
+   ```
+
+2. **Verificar override de método**
+   ```python
+   # En account_move.py
+   def _l10n_ar_get_invoice_totals_for_report(self):
+       result = super()._l10n_ar_get_invoice_totals_for_report()
+       if self.print_in_pesos and self._is_foreign_currency():
+           return self._convert_tax_totals_to_pesos(result)
+       return result
+   ```
+
+3. **Debug con log**
+   ```python
+   import logging
+   _logger = logging.getLogger(__name__)
+
+   def _convert_tax_totals_to_pesos(self, tax_totals_dict):
+       _logger.info(f"Convirtiendo totales: {tax_totals_dict}")
+       # ...
+   ```
+
+### Problema 5: TC No Se Auto-completa
+
+**Síntomas:**
+- Al crear documento en USD, TC queda en 0
+
+**Causas:**
+
+1. **No hay TC configurado para la fecha**
+   **Solución:**
+   ```
+   Contabilidad → Configuración → Monedas → USD → Tasas
+   → Agregar tasa para la fecha
+   ```
+
+2. **Onchange no se ejecuta**
+   **Solución:**
+   - Cambiar fecha del documento (triggera onchange)
+   - O ingresar TC manualmente
+
+### Problema 6: Totales en PDF No Cuadran
+
+**Síntomas:**
+- Suma de líneas: $ 1,250,000
+- Total mostrado: $ 1,180,000
+
+**Causa:**
+No se sobrescribió `_l10n_ar_prices_and_taxes()` en líneas
+
+**Solución:**
+Verificar en `account_move_line.py`:
+```python
+def _l10n_ar_prices_and_taxes(self):
+    result = super()._l10n_ar_prices_and_taxes()
+    move = self.move_id
+    if move.print_in_pesos and move._is_foreign_currency():
+        if move.manual_currency_rate:
+            for key in ('price_unit', 'price_subtotal', 'price_total', 'vat_amount'):
+                if key in result:
+                    result[key] = result[key] * move.manual_currency_rate
+    return result
+```
+
+---
+
+## Buenas Prácticas Implementadas
+
+### 1. Override Defensivo
+
+```python
+# ✅ CORRECTO: Llama super() primero
+def method(self):
+    result = super().method()
+    # Modifica solo si aplica
+    if self.condition:
+        result = self.transform(result)
+    return result
+
+# ❌ INCORRECTO: Reemplaza completamente
+def method(self):
+    # Lógica propia sin llamar super()
+    return custom_result
+```
+
+**Ventajas:**
+- Respeta otras customizaciones
+- Compatible con módulos de terceros
+- Fácil de debuggear
+
+### 2. Campos Computados vs Stored
+
+```python
+# Computed sin store (recalcula siempre)
+amount_total_pesos = fields.Monetary(
+    compute='_compute_amounts_pesos',
+    # NO store=True
+)
+
+# Related con store (performance)
+product_categ_id = fields.Many2one(
+    related='product_id.categ_id',
+    store=True,  # ✅ Para reportes
+)
+```
+
+**Cuándo usar store=True:**
+- Campos usados en agrupaciones (pivot)
+- Búsquedas frecuentes
+- Reportes de performance
+
+**Cuándo NO usar store:**
+- Valores que cambian frecuentemente (TC, totales)
+- Basados en fecha actual
+- Requieren datos actualizados siempre
+
+### 3. Inmutabilidad en Diccionarios
+
+```python
+# ✅ CORRECTO: Deep copy
+def transform_dict(self, data):
+    result = copy.deepcopy(data)
+    result['key'] = new_value
+    return result
+
+# ❌ INCORRECTO: Mutar original
+def transform_dict(self, data):
+    data['key'] = new_value  # ← Afecta al caller
+    return data
+```
+
+### 4. Contextos Especiales
+
+```python
+# Por qué: Evitar validaciones/recursiones durante operaciones batch
+line.with_context(check_move_validity=False).write({...})
+
+# Otros contextos útiles:
+# - tracking_disable: No crear mensajes en chatter
+# - mail_create_nosubscribe: No suscribir al creador
+# - mail_notrack: No trackear cambios
+```
+
+### 5. Depends Completos
+
+```python
+# ✅ CORRECTO: Incluir todas las dependencias
+@api.depends('amount_untaxed', 'amount_tax', 'amount_total',
+             'currency_id', 'company_currency_id',
+             'invoice_date', 'date', 'manual_currency_rate')
+def _compute_amounts_pesos(self):
+    pass
+
+# ❌ INCORRECTO: Faltan dependencias
+@api.depends('amount_total')  # ← Falta manual_currency_rate
+def _compute_amounts_pesos(self):
+    # No se recalcula cuando cambia el TC
+    pass
+```
+
+### 6. Validaciones Defensivas
+
+```python
+# ✅ CORRECTO: Validar antes de operar
+for move in self:
+    if move.manual_currency_rate and move._is_foreign_currency():
+        # Operación segura
+    else:
+        # Caso alternativo
+        pass
+
+# ❌ INCORRECTO: Asumir condiciones
+for move in self:
+    result = move.amount_total * move.manual_currency_rate  # ← Puede ser 0 o False
+```
+
+### 7. Comentarios Didácticos
+
+```python
+# Por qué: Explica la razón (el "por qué")
+# Patrón: Nombra el patrón de diseño
+# Tip: Consejo para aprender
+
+# Ejemplo:
+# Por qué: invoice_date es la fecha fiscal que determina el TC legal
+date = move.invoice_date or move.date
+
+# Patrón: Deep copy para no mutar el diccionario original
+tax_totals = copy.deepcopy(tax_totals_dict)
+
+# Tip: formatLang respeta el idioma y formato regional del usuario
+formatted = formatLang(self.env, amount, currency_obj=currency)
+```
+
+### 8. Uso de Métodos Estándar
+
+```python
+# ✅ CORRECTO: Usar API de Odoo
+amount_ars = currency_id._convert(
+    amount_usd, ars_currency, company, date
+)
+
+# ❌ INCORRECTO: Calcular manualmente
+amount_ars = amount_usd * 1250.00  # Hardcoded, no respeta config
+```
+
+**Ventajas métodos estándar:**
+- Respeta configuración de redondeo
+- Maneja multicompañía correctamente
+- Compatible con otros módulos
+- Probado y mantenido por Odoo
 
 ---
 
 ## Extensiones Futuras
 
-### 1. Selección de Moneda de Impresión
+### 1. Histórico de TC
 
-Permitir elegir entre múltiples monedas (EUR, BRL, etc.).
+Mostrar gráfico de evolución del TC en el formulario:
 
 ```python
-print_currency_id = fields.Many2one('res.currency', string='Imprimir en')
+tc_history_ids = fields.One2many(
+    'currency.rate.history',
+    compute='_compute_tc_history'
+)
+
+def _compute_tc_history(self):
+    # Últimos 30 días de TC para esta moneda
 ```
 
-### 2. Histórico de Tipos de Cambio
+### 2. Alertas de Variación
 
-Mostrar tabla con TCs históricos en el formulario.
+Notificar cuando TC varía más de X%:
 
-### 3. Alertas de Variación de TC
+```python
+def write(self, vals):
+    if 'manual_currency_rate' in vals:
+        old_rate = self.manual_currency_rate
+        new_rate = vals['manual_currency_rate']
+        variation = abs((new_rate - old_rate) / old_rate * 100)
 
-Notificar cuando el TC varíe más de X% desde la última cotización.
+        if variation > 5:  # 5% de variación
+            self.message_post(
+                body=f"⚠️ Variación de TC mayor a 5%: {variation:.2f}%"
+            )
+```
 
-### 4. Análisis de Compras con Conversión Automática
+### 3. TC por Método de Pago
 
-Vista pivot que convierta TODO a pesos automáticamente.
+Diferentes TC según forma de pago:
 
-### 5. Exportación a Excel
+```python
+manual_currency_rate_cash = fields.Float('TC Efectivo')
+manual_currency_rate_bank = fields.Float('TC Transferencia')
+```
 
-Botón para exportar presupuesto/factura en Excel con ambas monedas.
+### 4. Exportación Dual a Excel
+
+Botón para exportar con ambas monedas:
+
+```
+| Producto | Cantidad | P.Unit USD | Subtotal USD | P.Unit ARS | Subtotal ARS |
+|----------|----------|------------|--------------|------------|--------------|
+| Prod A   | 10       | $100       | $1,000       | $125,000   | $1,250,000   |
+```
+
+### 5. Conversión Masiva
+
+Wizard para convertir múltiples documentos a la vez:
+
+```python
+class MassConvertWizard(models.TransientModel):
+    _name = 'mass.convert.wizard'
+
+    invoice_ids = fields.Many2many('account.move')
+    target_currency_id = fields.Many2one('res.currency')
+    manual_rate = fields.Float()
+
+    def action_convert(self):
+        # Aplicar TC a todos los documentos seleccionados
+```
 
 ---
 
-## Licencia
+## Licencia y Soporte
 
-LGPL-3
-
----
-
-## Soporte
+**Licencia:** LGPL-3
 
 **Autor:** Surtecnica
+
 **Versión:** 17.0.1.0.0
-**Categoría:** Accounting
+
+**Categoría:** Accounting / Reporting
+
+**Soporte:**
+- Issues: [GitHub Repository]
+- Email: [email de soporte]
 
 ---
 
 ## Notas de Versión
 
-### v17.0.1.0.0
-- Implementación inicial de impresión en pesos para facturas, presupuestos de venta y órdenes de compra
-- Agregado campo `company_currency_id` en modelos `sale.order` y `purchase.order` para soporte de campos Monetary
-- Análisis de líneas de compra con vistas pivot y agrupaciones
+### v17.0.1.0.0 (Actual)
+
+**Nuevas Funcionalidades:**
+- ✅ Tipo de cambio manual editable en presupuestos, órdenes y facturas
+- ✅ Auto-completado de TC con TC de la fecha
+- ✅ Tracking de cambios de TC en chatter
+- ✅ Transferencia automática de TC desde presupuestos/órdenes a facturas
+- ✅ Impresión en pesos para facturas (con l10n_ar)
+- ✅ Impresión en pesos para presupuestos de venta
+- ✅ Impresión en pesos para órdenes de compra
+- ✅ Registración contable usando TC manual (no TC nativo de Odoo)
+- ✅ Análisis de líneas de compra con vistas pivot
+- ✅ Smart buttons para toggle de impresión
+
+**Correcciones:**
+- ✅ Fix: Asientos desbalanceados al aplicar TC manual
+- ✅ Fix: TC manual sobrescrito por onchange al crear factura
+- ✅ Fix: Totales en PDF no cuadraban con líneas
+
+**Arquitectura:**
+- Herencia por extensión (no invasiva)
+- Override de métodos l10n_ar para facturas argentinas
+- Computed fields con depends para reactividad
+- Deep copy para inmutabilidad de diccionarios
+- Contextos especiales para operaciones batch
+
+---
+
+## Resumen de Archivos
+
+```
+surtecnica-reportes-dolar-peso/
+├── __manifest__.py                   # Metadata del módulo
+├── README.md                         # Este archivo
+│
+├── models/
+│   ├── account_move.py              # Facturas: TC manual, impresión, contabilidad
+│   ├── account_move_line.py         # Líneas factura: conversión de precios
+│   ├── sale_order.py                # Presupuestos: TC manual, impresión
+│   ├── sale_order_line.py           # Líneas presupuesto: conversión
+│   ├── purchase_order.py            # Órdenes: TC manual, impresión
+│   └── purchase_order_line.py       # Líneas orden: conversión + análisis
+│
+├── views/
+│   ├── account_move_views.xml       # Smart button + campo TC en facturas
+│   ├── sale_order_views.xml         # Smart button + campo TC en presupuestos
+│   ├── purchase_order_views.xml     # Smart button + campo TC en órdenes
+│   └── purchase_order_line_views.xml # Vistas análisis (list/pivot/search)
+│
+└── report/
+    ├── account_move_report.xml      # PDF facturas con conversión a pesos
+    ├── sale_order_report.xml        # PDF presupuestos con conversión
+    └── purchase_order_report.xml    # PDF órdenes con conversión
+```
+
+---
+
+**Fin del documento**
+
+Para consultas técnicas o reportar issues, consultar la sección de Soporte.
