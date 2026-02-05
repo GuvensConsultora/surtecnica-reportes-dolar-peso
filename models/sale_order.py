@@ -14,6 +14,15 @@ class SaleOrder(models.Model):
              'el PDF mostrará los valores convertidos a pesos.',
     )
 
+    # Por qué: Campo relacionado necesario para los campos Monetary que usan currency_field
+    # Patrón: Campo related para acceder a company_id.currency_id de forma directa
+    company_currency_id = fields.Many2one(
+        'res.currency',
+        string='Moneda de la Compañía',
+        related='company_id.currency_id',
+        readonly=True,
+    )
+
     # Por qué: Campos computados para mostrar valores en moneda de la compañía
     # Patrón: Computed fields con depends para recalcular cuando cambian los valores base
     amount_untaxed_pesos = fields.Monetary(
