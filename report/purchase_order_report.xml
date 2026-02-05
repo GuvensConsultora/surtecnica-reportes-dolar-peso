@@ -38,6 +38,7 @@
         </xpath>
 
         <!-- ── Nota informativa después de la dirección ─────────────── -->
+        <!-- Temporalmente comentado
         <xpath expr="//div[@id='informations']" position="after">
             <div t-if="o.print_in_pesos and o._is_foreign_currency()" class="row mt-2">
                 <div class="col-12">
@@ -47,15 +48,18 @@
                 </div>
             </div>
         </xpath>
+        -->
 
         <!--
         ── Precios de líneas ─────────────────────────────────────────
         Por qué: Necesitamos cambiar tanto el valor como el símbolo de moneda.
         Los campos computados (*_pesos) ya tienen los valores convertidos.
         Tip: El template de purchase usa 'o' en lugar de 'doc' como variable.
+        Temporalmente comentado
         -->
 
         <!-- Precio unitario -->
+        <!--
         <xpath expr="//span[@t-field='line.price_unit']" position="replace">
             <t t-if="not o.print_in_pesos or not o._is_foreign_currency()">
                 <span t-field="line.price_unit" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
@@ -64,8 +68,10 @@
                 <span t-out="line.price_unit_pesos" t-options='{"widget": "monetary", "display_currency": o.company_id.currency_id}'/>
             </t>
         </xpath>
+        -->
 
         <!-- Subtotal de línea -->
+        <!--
         <xpath expr="//span[@t-field='line.price_subtotal']" position="replace">
             <t t-if="not o.print_in_pesos or not o._is_foreign_currency()">
                 <span t-field="line.price_subtotal" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
@@ -74,6 +80,7 @@
                 <span t-out="line.price_subtotal_pesos" t-options='{"widget": "monetary", "display_currency": o.company_id.currency_id}'/>
             </t>
         </xpath>
+        -->
 
         <!--
         ── Totales ───────────────────────────────────────────────────
@@ -118,6 +125,7 @@
         -->
 
         <!-- ── Nota al pie de totales ────────────────────────────────── -->
+        <!-- Temporalmente comentado
         <xpath expr="//div[@id='total']" position="after">
             <div t-if="o.print_in_pesos and o._is_foreign_currency()"
                  class="text-muted small mt-2 text-end" style="font-style: italic;">
@@ -126,6 +134,7 @@
                 T.C. al <t t-out="o.date_order" t-options='{"widget": "date"}'/>
             </div>
         </xpath>
+        -->
 
     </template>
 </odoo>
