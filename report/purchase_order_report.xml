@@ -125,16 +125,15 @@
         -->
 
         <!-- ── Nota al pie de totales ────────────────────────────────── -->
-        <!-- Temporalmente comentado
-        <xpath expr="//div[@id='total']" position="after">
+        <xpath expr="//div[hasclass('page')]" position="inside">
             <div t-if="o.print_in_pesos and o._is_foreign_currency()"
-                 class="text-muted small mt-2 text-end" style="font-style: italic;">
-                Valores expresados en <t t-out="o.company_id.currency_id.name"/> —
+                 class="text-muted small mt-4 text-center" style="font-style: italic; border-top: 1px solid #ddd; padding-top: 10px;">
+                <strong>Valores expresados en <t t-out="o.company_id.currency_id.name"/></strong> —
                 Moneda original: <t t-out="o.currency_id.name"/> —
-                T.C. al <t t-out="o.date_order" t-options='{"widget": "date"}'/>
+                Tipo de Cambio: <t t-out="o.manual_currency_rate" t-options='{"widget": "float", "precision": 4}'/> —
+                Fecha: <t t-out="o.date_order" t-options='{"widget": "date"}'/>
             </div>
         </xpath>
-        -->
 
     </template>
 </odoo>

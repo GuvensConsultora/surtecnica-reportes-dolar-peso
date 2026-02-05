@@ -28,8 +28,16 @@
             <!-- Por qué: Agregar campo de TC manual visible solo en moneda extranjera -->
             <xpath expr="//field[@name='pricelist_id']" position="after">
                 <field name="manual_currency_rate"
-                       invisible="currency_id == company_id.currency_id"
-                       placeholder="Dejar vacío para usar TC automático"/>
+                       invisible="currency_id == company_id.currency_id"/>
+            </xpath>
+
+            <!-- Por qué: Mostrar totales en pesos cuando print_in_pesos está activo -->
+            <xpath expr="//field[@name='amount_total']" position="after">
+                <field name="amount_total_pesos"
+                       invisible="not print_in_pesos or currency_id == company_id.currency_id"
+                       string="Total (Pesos)"
+                       widget="monetary"
+                       options="{'currency_field': 'company_currency_id'}"/>
             </xpath>
         </field>
     </record>
