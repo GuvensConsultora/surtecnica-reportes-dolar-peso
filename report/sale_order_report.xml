@@ -69,31 +69,7 @@
             <attribute name="t-field">None if (doc.print_in_pesos and doc._is_foreign_currency()) else line.price_subtotal</attribute>
         </xpath>
 
-        <!--
-        ── Totales ───────────────────────────────────────────────────
-        Por qué: Cambiar valores y moneda de visualización condicionalmente
-        -->
-
-        <!-- Subtotal (sin impuestos) -->
-        <xpath expr="//span[@t-field='doc.amount_untaxed']" position="attributes">
-            <attribute name="t-options-display_currency">doc.company_id.currency_id if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.currency_id</attribute>
-            <attribute name="t-out">doc.amount_untaxed_pesos if (doc.print_in_pesos and doc._is_foreign_currency()) else None</attribute>
-            <attribute name="t-field">None if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.amount_untaxed</attribute>
-        </xpath>
-
-        <!-- Impuestos -->
-        <xpath expr="//span[@t-field='doc.amount_tax']" position="attributes">
-            <attribute name="t-options-display_currency">doc.company_id.currency_id if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.currency_id</attribute>
-            <attribute name="t-out">doc.amount_tax_pesos if (doc.print_in_pesos and doc._is_foreign_currency()) else None</attribute>
-            <attribute name="t-field">None if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.amount_tax</attribute>
-        </xpath>
-
-        <!-- Total -->
-        <xpath expr="//span[@t-field='doc.amount_total']" position="attributes">
-            <attribute name="t-options-display_currency">doc.company_id.currency_id if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.currency_id</attribute>
-            <attribute name="t-out">doc.amount_total_pesos if (doc.print_in_pesos and doc._is_foreign_currency()) else None</attribute>
-            <attribute name="t-field">None if (doc.print_in_pesos and doc._is_foreign_currency()) else doc.amount_total</attribute>
-        </xpath>
+        <!-- Totales: XPath no funciona en Odoo 17 sale.order - elementos no existen -->
 
         <!-- ── Nota al pie de totales ────────────────────────────────── -->
         <xpath expr="//div[hasclass('page')]" position="inside">
