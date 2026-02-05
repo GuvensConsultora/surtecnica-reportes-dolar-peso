@@ -24,6 +24,14 @@ class PurchaseOrderLine(models.Model):
     )
 
     # ── Campos para impresión en pesos ────────────────────────────────────
+    # Por qué: Campo relacionado necesario para los campos Monetary que usan currency_field
+    company_currency_id = fields.Many2one(
+        'res.currency',
+        string='Moneda de la Compañía',
+        related='order_id.company_id.currency_id',
+        readonly=True,
+    )
+
     # Por qué: Campos para mostrar precio unitario y subtotal en pesos en el PDF
     price_unit_pesos = fields.Monetary(
         string='Precio Unit. (Pesos)',
