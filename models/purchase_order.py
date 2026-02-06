@@ -38,14 +38,17 @@ class PurchaseOrder(models.Model):
     def _onchange_currency_rate(self):
         """Actualiza el TC cuando cambia la moneda o la fecha."""
         for order in self:
-            if order.currency_id and order.company_id.currency_id and order.currency_id != order.company_id.currency_id:
-                # Por qué: Obtenemos el TC de la fecha actual
-                date = order.date_order or fields.Date.context_today(order)
-                # Convertimos 1 unidad de la moneda extranjera a pesos
-                order.manual_currency_rate = order.currency_id._convert(
-                    1.0, order.company_id.currency_id, order.company_id, date)
-            else:
-                order.manual_currency_rate = 0.0
+            # Por qué: Solo actualizar si NO hay TC manual ya establecido
+            # Esto permite que el usuario edite el TC sin que se sobrescriba al cambiar la fecha
+            if not order.manual_currency_rate:
+                if order.currency_id and order.company_id.currency_id and order.currency_id != order.company_id.currency_id:
+                    # Por qué: Obtenemos el TC de la fecha actual
+                    date = order.date_order or fields.Date.context_today(order)
+                    # Convertimos 1 unidad de la moneda extranjera a pesos
+                    order.manual_currency_rate = order.currency_id._convert(
+                        1.0, order.company_id.currency_id, order.company_id, date)
+                else:
+                    order.manual_currency_rate = 0.0
 
     # Por qué: Campos computados para mostrar valores en moneda de la compañía
     # Patrón: Computed fields con depends para recalcular cuando cambian los valores base
@@ -123,6 +126,33 @@ class PurchaseOrder(models.Model):
                     )
                 return res
         return super(PurchaseOrder, self).write(vals)
+
+    def button_confirm(self):
+        """Override para registrar TC en chatter al confirmar."""
+        # Por qué: Ejecutar confirmación estándar primero
+        result = super(PurchaseOrder, self).button_confirm()
+
+        # Por qué: Registrar TC en chatter si es moneda extranjera
+        for order in self:
+            if order.manual_currency_rate and order._is_foreign_currency():
+                order.message_post(
+                    body=f"""
+                    <div style="padding: 12px; background: #e3f2fd; border-left: 4px solid #2196F3; border-radius: 4px; margin: 8px 0;">
+                        <div style="margin-bottom: 8px;">
+                            <span style="font-size: 16px;">✓</span>
+                            <strong style="color: #1565c0; font-size: 14px;">Orden de Compra Confirmada</strong>
+                        </div>
+                        <div style="color: #424242; line-height: 1.6;">
+                            <strong>Tipo de Cambio:</strong> {order.manual_currency_rate:.4f}<br/>
+                            <strong>Conversión:</strong> {order.currency_id.name} → {order.company_currency_id.name}<br/>
+                            <strong>Fecha:</strong> {order.date_order.strftime('%d/%m/%Y') if order.date_order else 'N/A'}
+                        </div>
+                    </div>
+                    """,
+                    subject="Confirmación con Tipo de Cambio"
+                )
+
+        return result
 
     def _prepare_invoice(self):
         """Override para copiar el TC de la orden de compra a la factura."""

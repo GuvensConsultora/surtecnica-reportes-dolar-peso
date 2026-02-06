@@ -95,6 +95,48 @@ class AccountMove(models.Model):
         self.ensure_one()
         return self.currency_id and self.company_currency_id and self.currency_id != self.company_currency_id
 
+    def action_post(self):
+        """Override para registrar TC en chatter al validar factura."""
+        # Por qué: Ejecutar validación estándar primero
+        result = super(AccountMove, self).action_post()
+
+        # Por qué: Registrar TC en chatter si es moneda extranjera
+        for move in self:
+            if move.manual_currency_rate and move._is_foreign_currency():
+                # Por qué: Diferentes colores para facturas de cliente vs proveedor
+                if move.move_type in ('out_invoice', 'out_refund'):
+                    bg_color = '#fff3e0'
+                    border_color = '#FF9800'
+                    title_color = '#e65100'
+                    icon = '📄'
+                    doc_type = 'Factura de Cliente'
+                else:
+                    bg_color = '#fce4ec'
+                    border_color = '#E91E63'
+                    title_color = '#880e4f'
+                    icon = '📋'
+                    doc_type = 'Factura de Proveedor'
+
+                move.message_post(
+                    body=f"""
+                    <div style="padding: 12px; background: {bg_color}; border-left: 4px solid {border_color}; border-radius: 4px; margin: 8px 0;">
+                        <div style="margin-bottom: 8px;">
+                            <span style="font-size: 16px;">{icon}</span>
+                            <strong style="color: {title_color}; font-size: 14px;">{doc_type} Validada</strong>
+                        </div>
+                        <div style="color: #424242; line-height: 1.6;">
+                            <strong>Tipo de Cambio:</strong> {move.manual_currency_rate:.4f}<br/>
+                            <strong>Conversión:</strong> {move.currency_id.name} → {move.company_currency_id.name}<br/>
+                            <strong>Fecha:</strong> {move.invoice_date.strftime('%d/%m/%Y') if move.invoice_date else move.date.strftime('%d/%m/%Y') if move.date else 'N/A'}<br/>
+                            <strong>Total:</strong> {move.currency_id.symbol} {move.amount_total:,.2f} = {move.company_currency_id.symbol} {move.amount_total * move.manual_currency_rate:,.2f}
+                        </div>
+                    </div>
+                    """,
+                    subject="Validación con Tipo de Cambio"
+                )
+
+        return result
+
     # ── Override create/write para aplicar TC manual ──────────────────────
     # Por qué: Recalcular líneas contables cuando se crea/modifica con TC manual
     @api.model_create_multi
