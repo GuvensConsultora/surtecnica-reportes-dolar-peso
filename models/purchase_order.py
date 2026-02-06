@@ -135,21 +135,38 @@ class PurchaseOrder(models.Model):
         # Por qué: Registrar TC en chatter si es moneda extranjera
         for order in self:
             if order.manual_currency_rate and order._is_foreign_currency():
+                total_pesos = order.amount_total * order.manual_currency_rate
+                fecha = order.date_order.strftime('%d/%m/%Y') if order.date_order else 'N/A'
+
                 order.message_post(
-                    body=f"""
-                    <div style="padding: 12px; background: #e3f2fd; border-left: 4px solid #2196F3; border-radius: 4px; margin: 8px 0;">
-                        <div style="margin-bottom: 8px;">
-                            <span style="font-size: 16px;">✓</span>
-                            <strong style="color: #1565c0; font-size: 14px;">Orden de Compra Confirmada</strong>
-                        </div>
-                        <div style="color: #424242; line-height: 1.6;">
-                            <strong>Tipo de Cambio:</strong> {order.manual_currency_rate:.4f}<br/>
-                            <strong>Conversión:</strong> {order.currency_id.name} → {order.company_currency_id.name}<br/>
-                            <strong>Fecha:</strong> {order.date_order.strftime('%d/%m/%Y') if order.date_order else 'N/A'}
-                        </div>
-                    </div>
-                    """,
-                    subject="Confirmación con Tipo de Cambio"
+                    body=f"""<div class="alert alert-info" style="margin-bottom: 0;">
+    <h5>✓ <strong>Orden de Compra Confirmada</strong></h5>
+    <hr style="margin: 8px 0;"/>
+    <table class="table table-sm table-borderless" style="margin-bottom: 0;">
+        <tr>
+            <td style="width: 40%;"><strong>Tipo de Cambio:</strong></td>
+            <td><span class="badge badge-primary" style="font-size: 13px;">{order.manual_currency_rate:.4f}</span></td>
+        </tr>
+        <tr>
+            <td><strong>Conversión:</strong></td>
+            <td>{order.currency_id.name} → {order.company_currency_id.name}</td>
+        </tr>
+        <tr>
+            <td><strong>Fecha:</strong></td>
+            <td>{fecha}</td>
+        </tr>
+        <tr>
+            <td><strong>Total Original:</strong></td>
+            <td><strong>{order.currency_id.symbol} {order.amount_total:,.2f}</strong></td>
+        </tr>
+        <tr>
+            <td><strong>Total en Pesos:</strong></td>
+            <td><strong style="color: #28a745; font-size: 14px;">{order.company_currency_id.symbol} {total_pesos:,.2f}</strong></td>
+        </tr>
+    </table>
+</div>""",
+                    subject="Confirmación con Tipo de Cambio",
+                    message_type='notification'
                 )
 
         return result
