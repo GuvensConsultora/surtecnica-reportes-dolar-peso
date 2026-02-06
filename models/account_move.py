@@ -116,8 +116,10 @@ class AccountMove(models.Model):
                 total_pesos = move.amount_total * move.manual_currency_rate
                 fecha = move.invoice_date.strftime('%d/%m/%Y') if move.invoice_date else (move.date.strftime('%d/%m/%Y') if move.date else 'N/A')
 
-                move.message_post(
-                    body=f"""<div class="alert {alert_class}" style="margin-bottom: 0;">
+                # Por qué: Usar Markup para que el HTML se renderice correctamente
+                from markupsafe import Markup
+
+                html_body = Markup(f"""<div class="alert {alert_class}" style="margin-bottom: 0;">
     <h5>{icon} <strong>{doc_type} Validada</strong></h5>
     <hr style="margin: 8px 0;"/>
     <table class="table table-sm table-borderless" style="margin-bottom: 0;">
@@ -142,9 +144,11 @@ class AccountMove(models.Model):
             <td><strong style="color: #28a745; font-size: 14px;">{move.company_currency_id.symbol} {total_pesos:,.2f}</strong></td>
         </tr>
     </table>
-</div>""",
-                    subject="Validación con Tipo de Cambio",
-                    message_type='notification'
+</div>""")
+
+                move.message_post(
+                    body=html_body,
+                    subject="Validación con Tipo de Cambio"
                 )
 
         return result

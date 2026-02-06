@@ -138,8 +138,10 @@ class SaleOrder(models.Model):
                 total_pesos = order.amount_total * order.manual_currency_rate
                 fecha = order.date_order.strftime('%d/%m/%Y') if order.date_order else 'N/A'
 
-                order.message_post(
-                    body=f"""<div class="alert alert-success" style="margin-bottom: 0;">
+                # Por qué: Usar Markup para que el HTML se renderice correctamente
+                from markupsafe import Markup
+
+                html_body = Markup(f"""<div class="alert alert-success" style="margin-bottom: 0;">
     <h5>✓ <strong>Presupuesto Confirmado</strong></h5>
     <hr style="margin: 8px 0;"/>
     <table class="table table-sm table-borderless" style="margin-bottom: 0;">
@@ -164,9 +166,11 @@ class SaleOrder(models.Model):
             <td><strong style="color: #28a745; font-size: 14px;">{order.company_currency_id.symbol} {total_pesos:,.2f}</strong></td>
         </tr>
     </table>
-</div>""",
-                    subject="Confirmación con Tipo de Cambio",
-                    message_type='notification'
+</div>""")
+
+                order.message_post(
+                    body=html_body,
+                    subject="Confirmación con Tipo de Cambio"
                 )
 
         return result
